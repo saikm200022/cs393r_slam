@@ -70,6 +70,7 @@ DEFINE_string(init_topic,
               "Name of ROS topic for initialization");
 DEFINE_string(map, "maps/GDC1.txt", "Name of vector map file");
 
+
 bool run_ = true;
 sensor_msgs::LaserScan last_laser_msg_;
 Navigation* navigation_ = nullptr;
@@ -84,14 +85,24 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   const Vector2f kLaserLoc(0.2, 0);
 
   static vector<Vector2f> point_cloud_;
-  // TODO Convert the LaserScan to a point cloud
-  // The LaserScan parameters are accessible as follows:
-  // msg.angle_increment // Angular increment between subsequent rays
-  // msg.angle_max // Angle of the first ray
-  // msg.angle_min // Angle of the last ray
-  // msg.range_max // Maximum observable range
-  // msg.range_min // Minimum observable range
-  // msg.ranges[i] // The range of the i'th ray
+  point_cloud_.clear();
+
+  float angle = msg.angle_min;
+  int range_index = 0;
+  while (angle <= msg.angle_max) {
+    Vector2f point;
+
+    float range = msg.ranges[range_index];
+    // if (range < msg.range_max) {
+      point[0] = 0.2 + range * cos(angle);
+      point[1] = range * sin(angle);
+
+      point_cloud_.push_back(point);
+    // }
+    angle += msg.angle_increment;
+    range_index += 1;
+  }
+
   navigation_->ObservePointCloud(point_cloud_, msg.header.stamp.toSec());
   last_laser_msg_ = msg;
 }

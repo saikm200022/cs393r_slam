@@ -64,6 +64,8 @@ using visualization::DrawArc;
 using visualization::DrawPoint;
 using visualization::DrawLine;
 using visualization::DrawParticle;
+using visualization::DrawCross;
+using visualization::DrawLine;
 
 // Create command line arguements
 DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
@@ -102,13 +104,54 @@ void InitializeMsgs() {
 void PublishParticles() {
   vector<particle_filter::Particle> particles;
   particle_filter_.GetParticles(&particles);
+  float s = 0;
+  
+  Vector2f robot_loc(0, 0);
+  float robot_angle(0);
+  particle_filter_.GetLocation(&robot_loc, &robot_angle);
   for (const particle_filter::Particle& p : particles) {
+    uint32_t kColor = 0;
+    uint32_t scaledColor = (uint32_t) (int) (((float) 0x0FF) * (1 - p.weight));
+    if (scaledColor > 0xFF) {
+      scaledColor = 0xFF;
+    }
+    kColor = scaledColor + (scaledColor << 8) + (scaledColor << 16);
+    
+    // kColor = 0;
+    // if (p.weight > (float) (1/ (float) particles.size())) {
+      // printf("good %f %x\n", p.weight, kColor);
+    // }
+    DrawLine(p.loc, robot_loc, kColor, vis_msg_);
+    // if (true)
+    // {
+    //   float ang = 0.0;
+    //   particle_filter::Particle temp;
+    //   temp.loc = p.loc;
+    //   for (ang = 0.0; ang <= 2 * M_PI; ang += M_PI/2.0)
+    //   {
+    //     printf("ANG: %f\n", ang);
+    //     temp.angle = ang;
+    //     particle_filter_.Update(last_laser_msg_.ranges,
+    //                             last_laser_msg_.range_min,
+    //                             last_laser_msg_.range_max,
+    //                             last_laser_msg_.angle_min,
+    //                             last_laser_msg_.angle_max,
+    //                             &temp);
+    //     printf("TEMP: %f\n", exp(temp.weight) * 10.0);
+    //     Vector2f weight_dist = Vector2f((temp.loc.x() * exp(temp.weight) * 100.0) * cos(ang), 
+    //                                     (temp.loc.y() * exp(temp.weight) * 100.0) * sin(ang));
+    //     DrawLine(p.loc, weight_dist, 0xA269E0, vis_msg_);
+    //   }
+    // }
+
     DrawParticle(p.loc, p.angle, vis_msg_);
+    s+= p.weight;
   }
+  // printf("\n");
 }
 
 void PublishPredictedScan() {
-  const uint32_t kColor = 0xd67d00;
+  const uint32_t kColor = 0xA269E5;
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
@@ -122,10 +165,30 @@ void PublishPredictedScan() {
       last_laser_msg_.angle_min,
       last_laser_msg_.angle_max,
       &predicted_scan);
-  for (const Vector2f& p : predicted_scan) {
-    DrawPoint(p, kColor, vis_msg_);
+  // for (const Vector2f& p : predicted_scan) {
+  //   // DrawPoint(particle_filter_.RobotToGlobal(p, robot_loc, robot_angle), kColor, vis_msg_);
+  //   DrawPoint(p, kColor, vis_msg_);
+
+  // }
+
+  for (unsigned i = 0; i < predicted_scan.size(); i+=particle_filter_.laser_point_trim) {
+    DrawPoint(predicted_scan[i], kColor, vis_msg_);
   }
 }
+
+// void PublishMap() {
+//   auto map = particle_filter_.map_;
+//   const uint32_t kColor = 0xFF73D4;
+
+//   for (size_t i = 0; i < map.lines.size(); ++i) {
+//       const line2f map_line = map.lines[i];
+//       DrawLine(map_line.p0,
+//              map_line.p1,
+//              kColor,
+//              vis_msg_);
+//   }
+
+// }
 
 void PublishTrajectory() {
   const uint32_t kColor = 0xadadad;
@@ -150,6 +213,22 @@ void PublishTrajectory() {
   }
 }
 
+void PublishRealScan() {
+  // printf("Drawing real scan\n");
+  const uint32_t kColor = 0xFF73D4;
+
+  float angle_delta = (last_laser_msg_.angle_max - last_laser_msg_.angle_min) / last_laser_msg_.ranges.size();
+  float angle = last_laser_msg_.angle_min;
+
+  for (unsigned index = 0; index < last_laser_msg_.ranges.size(); index++) {
+    Vector2f true_point = particle_filter_.LaserScanToPoint(angle, last_laser_msg_.ranges[index]);
+    // printf("Point: %f %f\n", true_point.x(), true_point.y());
+    DrawPoint(true_point, kColor, vis_msg_);
+    angle += angle_delta;
+  }
+  visualization_publisher_.publish(vis_msg_);
+}
+
 void PublishVisualization() {
   static double t_last = 0;
   if (GetMonotonicTime() - t_last < 0.05) {
@@ -161,8 +240,10 @@ void PublishVisualization() {
   ClearVisualizationMsg(vis_msg_);
 
   PublishParticles();
+  PublishRealScan();
   PublishPredictedScan();
   PublishTrajectory();
+  // PublishMap();
   visualization_publisher_.publish(vis_msg_);
 }
 
@@ -177,6 +258,8 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
       msg.range_max,
       msg.angle_min,
       msg.angle_max);
+
+  
   PublishVisualization();
 }
 

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "eigen3/Eigen/Dense"
+#include <math.h>
 
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
@@ -34,10 +35,16 @@ namespace navigation {
 
 struct PathOption {
   float curvature;
+  float theta;
   float clearance;
+  float radius;
+  Eigen::Vector2f CoT;
+  float angle_travelled;
   float free_path_length;
+  float distance_to_goal;
   Eigen::Vector2f obstruction;
   Eigen::Vector2f closest_point;
+  float score;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 };
 
@@ -58,15 +65,91 @@ class Navigation {
 
   // Updates based on an observed laser scan
   void ObservePointCloud(const std::vector<Eigen::Vector2f>& cloud,
-                         double time);
+                         float time);
 
   // Main function called continously from main
   void Run();
   // Used to set the next target pose.
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
+  void TrimDistanceToGoal (struct PathOption& option);
+
+
  private:
 
+  float* Simple1DTOC();
+  float* getBestCurvature();
+  float getTravellableDistance(struct PathOption& option);
+
+  float GetMaxDistance(struct PathOption& option, Eigen::Vector2f point);
+  float GetMaxDistance2(struct PathOption& option, Eigen::Vector2f point);
+
+  float GetMaxDistanceStraight(Eigen::Vector2f point);
+  float Simple1DTOC(Eigen::Vector2f point);
+  float getDistanceToGoal(struct PathOption& option);
+  float GetAngleBetweenVectors (Eigen::Vector2f a, Eigen::Vector2f b);
+  void scorePath(struct PathOption& option);
+
+  void GetClearance (struct PathOption& option);
+
+  void TransformPointCloud(float dx, float dy, float theta);
+
+
+  void DrawCar();
+  void DrawArcs(float theta, float dist);
+
+
+  Eigen::Vector2f GlobalToRobot(Eigen::Vector2f point);
+
+
+  // REAL CAR CONSTANTS
+  const float LENGTH = 0.5;
+  const float WIDTH = 0.25;
+  const float WHEELBASE = 0.35;
+  const float TRACK = 0.25;
+  const float SAFETY_MARGIN = 0.1;
+
+  // SIMULATOR CONSTANTS
+  // const float LENGTH = 0.535;
+  // const float WIDTH = 0.281;
+  // const float WHEELBASE = 0.535;
+  // const float TRACK = 0.281;
+  // const float SAFETY_MARGIN = 0.1;
+
+  float CAR_FRONT = WHEELBASE + (LENGTH+SAFETY_MARGIN*2 - WHEELBASE)/2;
+  float CAR_INSIDE = (WIDTH + SAFETY_MARGIN*2) / 2.0;
+  float CAR_OUTSIDE = -CAR_INSIDE;
+
+  Eigen::Vector2f INNER_FRONT_CORNER = Eigen::Vector2f(CAR_FRONT, CAR_INSIDE);
+  Eigen::Vector2f OUTER_FRONT_CORNER = Eigen::Vector2f(CAR_FRONT, CAR_INSIDE);
+
+  const float MAX_VELOCITY = 1.0;
+  const float MAX_ACCEL = 0.4;
+  const float MAX_DECEL = 0.4;
+
+  const float INF = std::numeric_limits<float>::max();
+
+  Eigen::Vector2f GOAL = Eigen::Vector2f(25, 0);
+
+  Eigen::Vector2f GetTranslation(float velocity, float curvature, float time);
+  float GetRotation(float velocity, float curvature, float time);
+
+  float LATENCY = 0.1;
+
+  float CLEARANCE_WEIGHT = 0.1;
+  float GOAL_WEIGHT = 0.1;
+
+  bool VISUALIZE = 1;
+  
+  int iteration = 0;
+  int scratch = 0;
+
+  float previous_velocity = 0;
+  float previous_curvature = 0;
+
+  Eigen::Vector2f obstacle; 
+
+  
   // Whether odometry has been initialized.
   bool odom_initialized_;
   // Whether localization has been initialized.

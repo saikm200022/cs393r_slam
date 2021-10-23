@@ -37,6 +37,20 @@ struct Particle {
   Eigen::Vector2f loc;
   float angle;
   double weight;
+
+  public:
+    Particle() {
+      loc = Eigen::Vector2f(0, 0);
+      angle = 0.0;
+      weight = 0.0;
+    }
+
+
+    Particle(float x, float y, float theta, double init_weight) {
+      loc = Eigen::Vector2f(x,y);
+      angle = theta;
+      weight = init_weight;
+    }
 };
 
 class ParticleFilter {
@@ -77,6 +91,13 @@ class ParticleFilter {
   // Resample particles.
   void Resample();
 
+  Eigen::Vector2f LaserScanToPoint(float angle, float distance);
+  void NormalizeWeights();
+  int SearchBins(std::vector<float>& bins, float sample);
+  Eigen::Vector2f RobotToGlobal (Eigen::Vector2f point, const Eigen::Vector2f& loc, const float angle);
+  Eigen::Vector2f GlobalToRobot (Eigen::Vector2f point, const Eigen::Vector2f& loc, const float angle);
+  Eigen::Matrix2f GetRotationMatrix (const float angle);
+
   // For debugging: get predicted point cloud from current location.
   void GetPredictedPointCloud(const Eigen::Vector2f& loc,
                               const float angle,
@@ -86,6 +107,12 @@ class ParticleFilter {
                               float angle_min,
                               float angle_max,
                               std::vector<Eigen::Vector2f>* scan);
+  
+  Particle KMeansClustering(int k, float x_init, float y_init) const;
+
+  vector_map::VectorMap map_;
+  int laser_point_trim = 1;
+
 
  private:
 
@@ -93,7 +120,6 @@ class ParticleFilter {
   std::vector<Particle> particles_;
 
   // Map of the environment.
-  vector_map::VectorMap map_;
 
   // Random number generator.
   util_random::Random rng_;
@@ -102,6 +128,51 @@ class ParticleFilter {
   Eigen::Vector2f prev_odom_loc_;
   float prev_odom_angle_;
   bool odom_initialized_;
+
+  const int num_initial_particles = 50;
+
+  const double initial_std_x = 0.2;
+  const double initial_std_y = 0.2;
+  const double initial_std_theta = M_PI / 12;
+
+  const double laser_x_offset = 0.18;
+
+  int num_scans_predicted;
+
+  // Standard deviation of the sensor
+  // Seems pretty small?
+  double update_variance = 0.15;
+
+  // Account for correlation between rays on update step
+  // 1    -> no correlation
+  // 1/n  -> perfect correlation (n = number of rays)
+  double gamma = 1 / 50.0;
+
+  int visualize_particle_filter = 1;
+
+  const float k = 1.0;
+  const float odom_var_x = 0.1;
+  const float odom_var_y = 0.1;
+  const float odom_var_t = 0.1;
+
+
+
+  // Added by us
+  Eigen::Vector2f prev_odom_loc = Eigen::Vector2f(-1000, -1000);
+  float prev_odom_angle = 0;
+
+  float distance_travelled_og = .15; //.15 according to professor
+  float distance_travelled = distance_travelled_og;
+  float angle_travelled_og = .175; //.175 according to professor
+  float angle_travelled = angle_travelled_og;
+
+
+  int num_updates_og = 5;
+  int num_updates = num_updates_og;
+
+  Eigen::Vector2f d_short = Eigen::Vector2f(2, 2);
+  Eigen::Vector2f d_long = Eigen::Vector2f(2, 2);
+  int total_time = 0;
 };
 }  // namespace slam
 
