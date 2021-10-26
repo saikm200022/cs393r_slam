@@ -58,8 +58,12 @@ void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Return the latest pose estimate of the robot.
   *loc = Vector2f(0, 0);
   *angle = 0;
+
+  // Query 3D cube for most likely pose
+  // Convert pose to map frame
 }
 
+// Sum of gaussians approach
 void SLAM::ObserveLaser(const vector<float>& ranges,
                         float range_min,
                         float range_max,
@@ -68,6 +72,16 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // A new laser scan has been observed. Decide whether to add it as a pose
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
+
+
+
+  // If conditions met (0.5 m dist or 45 degrees rotated)
+  // Transform current robot scan to previous pose
+  // Create image for current scan
+  // For all points:
+  // Get value at that point from the image
+  // Calculate product
+  // Update previous image to current image
 }
 
 void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
@@ -79,7 +93,12 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   }
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
+
+  // Try out all possible delta x, y, theta
+
 }
+
+// p(x_i | x_j, u_i, u_j) = motion model
 
 vector<Vector2f> SLAM::GetMap() {
   vector<Vector2f> map;
