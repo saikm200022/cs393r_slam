@@ -30,6 +30,13 @@
 
 namespace slam {
 
+struct Pose {
+  float delta_x;
+  float delta_y;
+  float delta_theta;
+  float probability;
+};
+
 class SLAM {
  public:
   // Default Constructor.
@@ -58,6 +65,35 @@ class SLAM {
   Eigen::Vector2f prev_odom_loc_;
   float prev_odom_angle_;
   bool odom_initialized_;
+
+  float distance_travelled_og = 0.5; 
+  float distance_travelled = distance_travelled_og;
+  float angle_travelled_og = 0.45;
+  float angle_travelled = angle_travelled_og;
+
+  static constexpr float x_incr = 0.5;
+  static constexpr float y_incr = 0.5;
+  static constexpr float theta_incr = 0.1; 
+ 
+  static constexpr float x_max = 3;
+  static constexpr float y_max = 3;
+  static constexpr float theta_max = 2; 
+
+  static constexpr int x_width = (int) x_max / x_incr;
+  static constexpr int y_width = (int) y_max / y_incr;
+  static constexpr int theta_width = (int) theta_max / theta_incr;
+
+  slam::Pose cube[x_width][y_width][theta_width];
+  slam::Pose previous_pose;
+  
+  static constexpr float x_image_incr = 0.5;
+  static constexpr float y_image_incr = 0.5;
+  static constexpr float x_image_max = 3;
+  static constexpr float y_image_max = 3;
+  static constexpr int x_image_width = (int) x_image_max / x_image_incr;
+  static constexpr int y_image_width = (int) y_image_max / y_image_incr;
+
+  slam::Pose image[x_image_width][y_image_width];
 };
 }  // namespace slam
 

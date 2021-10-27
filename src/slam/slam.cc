@@ -63,6 +63,15 @@ void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Convert pose to map frame
 }
 
+SLAM::Matrix2f ParticleFilter::GetRotationMatrix (const float angle) {
+  Eigen::Matrix2f rot;
+  rot(0,0) = cos(angle);
+  rot(0,1) = -sin(angle);
+  rot(1,0) = sin(angle);
+  rot(1,1) = cos(angle);
+  return rot;
+}
+
 // Sum of gaussians approach
 void SLAM::ObserveLaser(const vector<float>& ranges,
                         float range_min,
@@ -73,9 +82,68 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
 
-
-
   // If conditions met (0.5 m dist or 45 degrees rotated)
+  if (distance_travelled <= 0 || angle_travelled <= 0)
+  { 
+    // Create Image
+    slam::Pose current_image[x_image_width][y_image_width];
+    vector<Vector2f> points;
+    while (angle <= angle_max) {
+      Vector2f point;
+      float range = ranges[range_index];
+      point[0] = 0.2 + range * cos(angle);
+      point[1] = range * sin(angle);
+
+      points.push_back(points);
+      angle += msg.angle_increment;
+      range_index += 1;
+    }
+
+    for (&auto point : points)
+    {
+      // Find probability for "pixels" in image
+      for (float d_x = 0; d_x <= x_image_max; d_x += x_image_incr)
+      {
+        for (float d_y = 0; d_y <= y_image_max; d_y += y_image_incr)
+        {
+          // Fit Gaussian over point to compute probability
+
+        }
+      }
+    }
+    
+    // For all perturbations along delta x, delta y, delta theta (x_1 + u)
+    for (float d_x = 0; d_x <= x_max; d_x += x_incr)
+    {
+      for (float d_y = 0; d_y <= y_max; d_y += y_incr)
+      {
+        for (float d_theta = 0; d_theta <= theta_max; d_theta += theta_incr)
+        {
+          Eigen::Matrix2f rot = GetRotationMatrix(d_theta);
+          float angle = angle_min;
+          int range_index = 0;
+
+          // Transform laser scan points based on perturbations
+          vector<Vector2f> transformed_points;
+          while (angle <= angle_max) {
+            Vector2f point;
+            float range = ranges[range_index];
+            point[0] = 0.2 + range * cos(angle);
+            point[1] = range * sin(angle);
+
+            // v_2 = Rv_1 + T
+            float new_x = cos(d_theta) * previous_pose.delta_x - sin(d_theta) * point[0] + d_x;
+            float new_y = sin(d_theta) * previous_pose.delta_y + cos(d_theta) * point[1] + d_y;
+
+            transformed_points.push_back(Vector2f(new_x, new_y));
+            angle += msg.angle_increment;
+            range_index += 1;
+          }
+        }
+      }
+    }
+  }
+
   // Transform current robot scan to previous pose
   // Create image for current scan
   // For all points:
