@@ -72,6 +72,12 @@ SLAM::Matrix2f ParticleFilter::GetRotationMatrix (const float angle) {
   return rot;
 }
 
+// x_2 = current
+// x_1 previous
+
+// estimate x_2 by trying out all x_1 + u
+// Scan of x_2 ground truth and we compare that to the transformed x_1 laser scan
+
 // Sum of gaussians approach
 void SLAM::ObserveLaser(const vector<float>& ranges,
                         float range_min,
@@ -107,7 +113,9 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         for (float d_y = 0; d_y <= y_image_max; d_y += y_image_incr)
         {
           // Fit Gaussian over point to compute probability
-
+          // Assign Probability values
+          float x = Math.pow(Math.pow(d_x, 2) + Math.pow(d_y, 2), 0.5);
+          current_image[d_x][d_y] = (1 / (s * sqrt(2 * M_PI) )) * exp(-0.5 * pow((Math.pow(x - 0)/s, obs_likelihood_stdv)));
         }
       }
     }
@@ -131,17 +139,27 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             point[0] = 0.2 + range * cos(angle);
             point[1] = range * sin(angle);
 
-            // v_2 = Rv_1 + T
-            float new_x = cos(d_theta) * previous_pose.delta_x - sin(d_theta) * point[0] + d_x;
-            float new_y = sin(d_theta) * previous_pose.delta_y + cos(d_theta) * point[1] + d_y;
+            // Reverse Transform to previous pose
+            float new_x = cos(-d_theta) * point[0] - sin(-d_theta) * point[1] - d_x;
+            float new_y = sin(-d_theta) * point[0] + cos(-d_theta) * point[1] - d_y;
 
             transformed_points.push_back(Vector2f(new_x, new_y));
             angle += msg.angle_increment;
             range_index += 1;
           }
+
+          // TODO: Compare Previous Image and Transformed Scan
+          float probability = 1.0;
+          for (auto& point : transformed_points)
+          {
+            probability *= image[point[0]][point[1]];
+          }
+
+          cube[d_x][d_y][d_theta] = probability;
         }
       }
     }
+    image = current_image;
   }
 
   // Transform current robot scan to previous pose

@@ -66,10 +66,14 @@ class SLAM {
   float prev_odom_angle_;
   bool odom_initialized_;
 
+  float obs_likelihood_stdv = 2;
+
   float distance_travelled_og = 0.5; 
   float distance_travelled = distance_travelled_og;
   float angle_travelled_og = 0.45;
   float angle_travelled = angle_travelled_og;
+
+  // negative displacements?
 
   static constexpr float x_incr = 0.5;
   static constexpr float y_incr = 0.5;
