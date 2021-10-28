@@ -63,7 +63,7 @@ void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Convert pose to map frame
 }
 
-SLAM::Matrix2f ParticleFilter::GetRotationMatrix (const float angle) {
+Eigen::Matrix2f SLAM::GetRotationMatrix (const float angle) {
   Eigen::Matrix2f rot;
   rot(0,0) = cos(angle);
   rot(0,1) = -sin(angle);
@@ -94,32 +94,45 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     // Create Image
     slam::Pose current_image[x_image_width][y_image_width];
     vector<Vector2f> points;
-    while (angle <= angle_max) {
+    
+    float angle = angle_min;
+    int range_index = 0;
+    float angle_increment = (angle_max - angle_min) / ranges.size();
+    while (angle <= angle_max) 
+    {
       Vector2f point;
       float range = ranges[range_index];
-      point[0] = 0.2 + range * cos(angle);
+      point[0] = laser_offset + range * cos(angle);
       point[1] = range * sin(angle);
 
-      points.push_back(points);
-      angle += msg.angle_increment;
+      points.push_back(point);
+      angle += angle_increment;
       range_index += 1;
     }
 
-    for (&auto point : points)
+    // Create Image by Centering gaussian around laser scan points
+    for (auto& point : points)
     {
-      // Find probability for "pixels" in image
-      for (float d_x = 0; d_x <= x_image_max; d_x += x_image_incr)
+      for (float pixel_x = 0; pixel_x < x_image_width; pixel_x++)
       {
-        for (float d_y = 0; d_y <= y_image_max; d_y += y_image_incr)
+        for (float pixel_y = 0; pixel_y < y_image_width; pixel_y++)
         {
-          // Fit Gaussian over point to compute probability
-          // Assign Probability values
-          float x = Math.pow(Math.pow(d_x, 2) + Math.pow(d_y, 2), 0.5);
-          current_image[d_x][d_y] = (1 / (s * sqrt(2 * M_PI) )) * exp(-0.5 * pow((Math.pow(x - 0)/s, obs_likelihood_stdv)));
+          float x = pixel_x * x_image_incr;
+          float y = pixel_y * y_image_incr;
+
+          float prob = 1.0;
+          float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5);
+
+          // Decoupled evaluation of multivariate gaussian where product is taken along x and y
+          prob *= exp(-0.5 * Math.pow(x/obs_likelihood_stdv, 2));
+          prob *= exp(-0.5 * Math.pow(y/obs_likelihood_stdv, 2));
+
+          // Sum of Gaussians 
+          current_image[pixel_x][pixel_y] += prob;
         }
       }
     }
-    
+
     // For all perturbations along delta x, delta y, delta theta (x_1 + u)
     for (float d_x = 0; d_x <= x_max; d_x += x_incr)
     {
@@ -133,6 +146,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
 
           // Transform laser scan points based on perturbations
           vector<Vector2f> transformed_points;
+          float angle_increment = (angle_max - angle_min) / num_ranges;
           while (angle <= angle_max) {
             Vector2f point;
             float range = ranges[range_index];
@@ -144,7 +158,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             float new_y = sin(-d_theta) * point[0] + cos(-d_theta) * point[1] - d_y;
 
             transformed_points.push_back(Vector2f(new_x, new_y));
-            angle += msg.angle_increment;
+            angle += angle_increment;
             range_index += 1;
           }
 
