@@ -91,13 +91,14 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0 || angle_travelled <= 0)
   { 
-    // Create Image
     slam::Pose current_image[x_image_width][y_image_width];
     vector<Vector2f> points;
-    
+
     float angle = angle_min;
     int range_index = 0;
     float angle_increment = (angle_max - angle_min) / ranges.size();
+
+    // Convert laser scans to points
     while (angle <= angle_max) 
     {
       Vector2f point;
@@ -113,10 +114,11 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     // Create Image by Centering gaussian around laser scan points
     for (auto& point : points)
     {
-      for (float pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+      for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
       {
-        for (float pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+        for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
         {
+          // Take left corner of every pixel
           float x = pixel_x * x_image_incr;
           float y = pixel_y * y_image_incr;
 
@@ -124,8 +126,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
           float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5);
 
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-          prob *= exp(-0.5 * Math.pow(x/obs_likelihood_stdv, 2));
-          prob *= exp(-0.5 * Math.pow(y/obs_likelihood_stdv, 2));
+          prob *= exp(-0.5 * Math.pow((x - point[0])/obs_likelihood_stdv, 2));
+          prob *= exp(-0.5 * Math.pow((y - point[1])/obs_likelihood_stdv, 2));
 
           // Sum of Gaussians 
           current_image[pixel_x][pixel_y] += prob;
@@ -162,14 +164,14 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             range_index += 1;
           }
 
-          // TODO: Compare Previous Image and Transformed Scan
+          // Compare Previous Image and Transformed Scan
           float probability = 1.0;
           for (auto& point : transformed_points)
           {
             probability *= image[point[0]][point[1]];
           }
 
-          cube[d_x][d_y][d_theta] = probability;
+          cube[d_x / x_incr][d_y / y_incr][d_theta / theta_incr] = probability;
         }
       }
     }
