@@ -114,6 +114,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     // Create Image by Centering gaussian around laser scan points
     for (auto& point : points)
     {
+      // pixel_x and pixel_y are bin indices in the image
       for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
       {
         for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
@@ -195,9 +196,38 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   }
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
+  
+  // T_2^Odom - T_1^Odom
+  Vector2f delta_odom = odom_loc - prev_odom_loc;
+  // R(-Theta_1^Odom)
+  Eigen::Matrix2f rot = GetRotationMatrix(-prev_odom_angle);
+  // R(theta_1^Map) * delta T_base_link
+  Vector2f delta_T_bl = rot * delta_odom;
+  // T_2^Map = T_1^Map + ...
+  Vector2f translation = GetRotationMatrix(particle.angle) * delta_T_bl;
+
+  float delta_theta_bl = odom_angle - prev_odom_angle;
 
   // Try out all possible delta x, y, theta
+  for (float d_x = 0; d_x <= x_max; d_x += x_incr)
+  {
+    for (float d_y = 0; d_y <= y_max; d_y += y_incr)
+    {
+      for (float d_theta = 0; d_theta <= theta_max; d_theta += theta_incr)
+      {
+        float prob = 1.0;
+        float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5) + k_2 * (delta_T_bl.norm());
 
+        // Decoupled evaluation of multivariate gaussian where product is taken along x, y, and theta
+        prob *= exp(-0.5 * Math.pow((d_x - translation[0]])/obs_likelihood_stdv, 2));
+        prob *= exp(-0.5 * Math.pow((d_y - translation[1])/obs_likelihood_stdv, 2));
+        prob *= exp(-0.5 * Math.pow((d_theta - delta_theta_bl)/obs_likelihood_stdv, 2));
+
+        // Sum of Gaussians 
+        cube[d_x / x_incr][d_y / y_incr][d_theta / theta_incr] *= prob;
+      }
+    }
+  }
 }
 
 // p(x_i | x_j, u_i, u_j) = motion model

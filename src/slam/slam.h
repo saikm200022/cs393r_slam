@@ -60,7 +60,7 @@ class SLAM {
   void GetPose(Eigen::Vector2f* loc, float* angle) const;
 
   Eigen::Matrix2f GetRotationMatrix (const float angle);
-  
+
  private:
 
   // Previous odometry-reported locations.
@@ -69,6 +69,7 @@ class SLAM {
   bool odom_initialized_;
 
   float k_1 = 2;
+  float k_2 = 2;
   float laser_offset = 0.2;
 
   float distance_travelled_og = 0.5; 
