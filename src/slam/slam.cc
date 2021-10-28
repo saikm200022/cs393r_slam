@@ -72,6 +72,33 @@ Eigen::Matrix2f SLAM::GetRotationMatrix (const float angle) {
   return rot;
 }
 
+vector<Vector2f> SLAM::GetScanPointCloud(const vector<float>& ranges,
+                        float range_min,
+                        float range_max,
+                        float angle_min,
+                        float angle_max)
+  {
+    vector<Vector2f> points;
+
+    float angle = angle_min;
+    int range_index = 0;
+    float angle_increment = (angle_max - angle_min) / ranges.size();
+
+    // Convert laser scans to points
+    while (angle <= angle_max) 
+    {
+      Vector2f point;
+      float range = ranges[range_index];
+      point[0] = laser_off + range * cos(angle);
+      point[1] = range * sin(angle);
+
+      points.push_back(point);
+      angle += angle_increment;
+      range_index += 1;
+    }
+    return points;
+  }
+
 // x_2 = current
 // x_1 previous
 
@@ -87,32 +114,26 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // A new laser scan has been observed. Decide whether to add it as a pose
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
+  
+  // For initial pose
+  if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
+  {
+    previous_pose.delta_x = 0;
+    previous_pose.delta_y = 0;
+    previous_pose.delta_theta = 0;
+    vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
+    previous_scan = points;
+    return;
+  }
 
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0 || angle_travelled <= 0)
   { 
-    slam::Pose current_image[x_image_width][y_image_width];
-    vector<Vector2f> points;
+    float current_image[x_image_width][y_image_width];
+    vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
 
-    float angle = angle_min;
-    int range_index = 0;
-    float angle_increment = (angle_max - angle_min) / ranges.size();
-
-    // Convert laser scans to points
-    while (angle <= angle_max) 
-    {
-      Vector2f point;
-      float range = ranges[range_index];
-      point[0] = laser_offset + range * cos(angle);
-      point[1] = range * sin(angle);
-
-      points.push_back(point);
-      angle += angle_increment;
-      range_index += 1;
-    }
-
-    // Create Image by Centering gaussian around laser scan points
-    for (auto& point : points)
+    // Create Image by Centering gaussians around previous laser scan points
+    for (auto& point : previous_scan)
     {
       // pixel_x and pixel_y are bin indices in the image
       for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
@@ -127,8 +148,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
           float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5);
 
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-          prob *= exp(-0.5 * Math.pow((x - point[0])/obs_likelihood_stdv, 2));
-          prob *= exp(-0.5 * Math.pow((y - point[1])/obs_likelihood_stdv, 2));
+          prob *= exp(-0.5 * pow((x - point[0])/std_dev, 2));
+          prob *= exp(-0.5 * pow((y - point[1])/std_dev, 2));
 
           // Sum of Gaussians 
           current_image[pixel_x][pixel_y] += prob;
@@ -136,47 +157,43 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
       }
     }
 
-    // For all perturbations along delta x, delta y, delta theta (x_1 + u)
-    for (float d_x = 0; d_x <= x_max; d_x += x_incr)
+    for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
-      for (float d_y = 0; d_y <= y_max; d_y += y_incr)
+      for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
       {
-        for (float d_theta = 0; d_theta <= theta_max; d_theta += theta_incr)
+        for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
         {
-          Eigen::Matrix2f rot = GetRotationMatrix(d_theta);
-          float angle = angle_min;
-          int range_index = 0;
+          float dx = pixel_x * x_incr;
+          float dy = pixel_y * y_incr;
+          float dtheta = pixel_theta * theta_incr;
 
-          // Transform laser scan points based on perturbations
-          vector<Vector2f> transformed_points;
-          float angle_increment = (angle_max - angle_min) / num_ranges;
-          while (angle <= angle_max) {
-            Vector2f point;
-            float range = ranges[range_index];
-            point[0] = 0.2 + range * cos(angle);
-            point[1] = range * sin(angle);
-
-            // Reverse Transform to previous pose
-            float new_x = cos(-d_theta) * point[0] - sin(-d_theta) * point[1] - d_x;
-            float new_y = sin(-d_theta) * point[0] + cos(-d_theta) * point[1] - d_y;
-
-            transformed_points.push_back(Vector2f(new_x, new_y));
-            angle += angle_increment;
-            range_index += 1;
-          }
-
-          // Compare Previous Image and Transformed Scan
-          float probability = 1.0;
-          for (auto& point : transformed_points)
+          vector<Vector2f> shifted_points;
+          for (auto& point : points)
           {
-            probability *= image[point[0]][point[1]];
+            // Shift point to previous pose
+            float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
+            float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
+
+            // Forward shift by dx, dy, dtheta
+            float final_x = cos(dtheta) * new_x - sin(dtheta) * new_y - dx;
+            float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y - dy;
+
+            shifted_points.push_back(Vector2f(final_x, final_y));
+          }
+          
+          // Calculate score by using gaussian values from image
+          float score = 1.0;
+          for (auto& point : shifted_points)
+          {
+            int point_pixel_x = point[0] / x_incr;
+            int point_pixel_y = point[1] / y_incr;
+            score *= current_image[point_pixel_x][point_pixel_y];
           }
 
-          cube[d_x / x_incr][d_y / y_incr][d_theta / theta_incr] = probability;
+          cube[pixel_x][pixel_y][pixel_theta] *= score;
         }
       }
     }
-    image = current_image;
   }
 
   // Transform current robot scan to previous pose
@@ -197,34 +214,31 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
   
-  // T_2^Odom - T_1^Odom
-  Vector2f delta_odom = odom_loc - prev_odom_loc;
-  // R(-Theta_1^Odom)
-  Eigen::Matrix2f rot = GetRotationMatrix(-prev_odom_angle);
-  // R(theta_1^Map) * delta T_base_link
-  Vector2f delta_T_bl = rot * delta_odom;
-  // T_2^Map = T_1^Map + ...
-  Vector2f translation = GetRotationMatrix(particle.angle) * delta_T_bl;
-
-  float delta_theta_bl = odom_angle - prev_odom_angle;
+  // Not sure this is correct (maybe too simple?)
+  Vector2f translation_hat = odom_loc - prev_odom_loc_;
+  float angle_hat = odom_angle - prev_odom_angle_;
 
   // Try out all possible delta x, y, theta
-  for (float d_x = 0; d_x <= x_max; d_x += x_incr)
+  for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
   {
-    for (float d_y = 0; d_y <= y_max; d_y += y_incr)
+    for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
     {
-      for (float d_theta = 0; d_theta <= theta_max; d_theta += theta_incr)
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
       {
+        float dx = pixel_x * x_incr;
+        float dy = pixel_y * y_incr;
+        float dtheta = pixel_theta * theta_incr;
+
         float prob = 1.0;
-        float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5) + k_2 * (delta_T_bl.norm());
+        float std_dev = k_1 * pow(pow(translation_hat[0], 2) + pow(translation_hat[1], 2), 0.5) + k_2 * (pow(angle_hat, 2));
 
         // Decoupled evaluation of multivariate gaussian where product is taken along x, y, and theta
-        prob *= exp(-0.5 * Math.pow((d_x - translation[0]])/obs_likelihood_stdv, 2));
-        prob *= exp(-0.5 * Math.pow((d_y - translation[1])/obs_likelihood_stdv, 2));
-        prob *= exp(-0.5 * Math.pow((d_theta - delta_theta_bl)/obs_likelihood_stdv, 2));
+        prob *= exp(-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
+        prob *= exp(-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
+        prob *= exp(-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
 
         // Sum of Gaussians 
-        cube[d_x / x_incr][d_y / y_incr][d_theta / theta_incr] *= prob;
+        cube[pixel_x][pixel_y][pixel_theta] *= prob;
       }
     }
   }

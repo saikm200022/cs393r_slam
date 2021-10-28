@@ -61,6 +61,12 @@ class SLAM {
 
   Eigen::Matrix2f GetRotationMatrix (const float angle);
 
+  std::vector<Eigen::Vector2f> GetScanPointCloud(const std::vector<float>& ranges,
+                        float range_min,
+                        float range_max,
+                        float angle_min,
+                        float angle_max);
+
  private:
 
   // Previous odometry-reported locations.
@@ -70,7 +76,7 @@ class SLAM {
 
   float k_1 = 2;
   float k_2 = 2;
-  float laser_offset = 0.2;
+  float laser_off = 0.2;
 
   float distance_travelled_og = 0.5; 
   float distance_travelled = distance_travelled_og;
@@ -91,8 +97,11 @@ class SLAM {
   static constexpr int y_width = (int) y_max / y_incr;
   static constexpr int theta_width = (int) theta_max / theta_incr;
 
-  slam::Pose cube[x_width][y_width][theta_width];
-  slam::Pose previous_pose;
+  float cube[x_width][y_width][theta_width];
+  slam::Pose previous_pose = {
+    -1000, -1000, -1000, 0.0
+  };
+  std::vector<Eigen::Vector2f> previous_scan;
   
   static constexpr float x_image_incr = 0.5;
   static constexpr float y_image_incr = 0.5;
@@ -100,8 +109,6 @@ class SLAM {
   static constexpr float y_image_max = 3;
   static constexpr int x_image_width = (int) x_image_max / x_image_incr;
   static constexpr int y_image_width = (int) y_image_max / y_image_incr;
-
-  slam::Pose image[x_image_width][y_image_width];
 };
 }  // namespace slam
 
