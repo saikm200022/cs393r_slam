@@ -302,6 +302,16 @@ vector<Vector2f> SLAM::GetMap() {
   vector<Vector2f> map;
   // Reconstruct the map as a single aligned point cloud from all saved poses
   // and their respective scans.
+
+  // For all points in previous scan, apply cumulative transformation to convert points to reference frame of pose 1
+  for (auto& point : previous_scan)
+  {
+    // Transform point to reference frame of pose 1
+    float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
+    float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
+    map.push_back(Vector2f(new_x, new_y));
+  }
+
   return map;
 }
 
