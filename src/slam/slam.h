@@ -66,6 +66,8 @@ class SLAM {
                         float range_max,
                         float angle_min,
                         float angle_max);
+  
+  slam::Pose MostLikelyPose();
 
  private:
 
@@ -101,6 +103,10 @@ class SLAM {
   slam::Pose previous_pose = {
     -1000, -1000, -1000, 0.0
   };
+  slam::Pose cumulative_transform = {
+    0, 0, 0, 0.0
+  };
+  slam::Pose best_pose;
   std::vector<Eigen::Vector2f> previous_scan;
   
   static constexpr float x_image_incr = 0.5;
@@ -109,6 +115,8 @@ class SLAM {
   static constexpr float y_image_max = 3;
   static constexpr int x_image_width = (int) x_image_max / x_image_incr;
   static constexpr int y_image_width = (int) y_image_max / y_image_incr;
+
+  std::vector<Eigen::Vector2f> estimated_map;
 };
 }  // namespace slam
 

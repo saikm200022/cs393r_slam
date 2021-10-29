@@ -54,13 +54,59 @@ SLAM::SLAM() :
     prev_odom_angle_(0),
     odom_initialized_(false) {}
 
+struct Pose SLAM::MostLikelyPose()
+{
+  // If the first pose, the cumulative transformations are all 0 therefore best pose is dx = 0, dy = 0, dtheta = 0
+   if (cumulative_transform.delta_x == 0 && cumulative_transform.delta_y == 0 && cumulative_transform.delta_theta == 0)
+  {
+    struct Pose first_pose = {
+      0, 0, 0, 0
+    };
+    return first_pose;
+  }
+
+  // Query 3D cube for most likely pose
+  // Convert pose to map frame
+
+  float best_x = 0.0;
+  float best_y = 0.0;
+  float best_theta = 0.0;
+  float most_likely = -1.0;
+
+  // Consult cube to find displacement that results in most likely pose
+  for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+  {
+    for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+    {
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+      {
+          if (most_likely < cube[pixel_x][pixel_y][pixel_theta])
+          {
+            best_x = pixel_x * x_incr;
+            best_y = pixel_y * y_incr;
+            best_theta = pixel_theta * theta_incr;
+            most_likely = cube[pixel_x][pixel_y][pixel_theta];
+          }
+      }
+    }
+  }
+  struct Pose new_pose = {
+    best_x, best_y, best_theta, most_likely
+  };
+  return new_pose;
+}
+
 void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Return the latest pose estimate of the robot.
   *loc = Vector2f(0, 0);
   *angle = 0;
-
-  // Query 3D cube for most likely pose
-  // Convert pose to map frame
+  
+  if (best_pose.delta_x == 0 && best_pose.delta_y == 0 && best_pose.delta_theta == 0)
+    return;
+  
+  // Find best pose with respect to pose 1 (using the cumulative_transform variable)
+  *loc = Vector2f(cumulative_transform.delta_x, cumulative_transform.delta_y);
+  *angle += cumulative_transform.delta_theta;
 }
 
 Eigen::Matrix2f SLAM::GetRotationMatrix (const float angle) {
@@ -141,8 +187,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
         {
           // Take left corner of every pixel
-          float x = pixel_x * x_image_incr;
-          float y = pixel_y * y_image_incr;
+          float x = pixel_x * x_image_incr + point[0];
+          float y = pixel_y * y_image_incr + point[1];
 
           float prob = 1.0;
           float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5);
@@ -194,6 +240,14 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         }
       }
     }
+
+    // Update all necessary global variables
+    previous_scan = points;
+    best_pose = MostLikelyPose();
+    cumulative_transform.delta_x += best_pose.delta_x;
+    cumulative_transform.delta_y += best_pose.delta_y;
+    cumulative_transform.delta_theta = best_pose.delta_theta;
+    previous_pose = best_pose;
   }
 
   // Transform current robot scan to previous pose
@@ -213,7 +267,7 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   }
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
-  
+
   // Not sure this is correct (maybe too simple?)
   Vector2f translation_hat = odom_loc - prev_odom_loc_;
   float angle_hat = odom_angle - prev_odom_angle_;
@@ -237,14 +291,12 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
         prob *= exp(-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
         prob *= exp(-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
 
-        // Sum of Gaussians 
+        // Motion model probability
         cube[pixel_x][pixel_y][pixel_theta] *= prob;
       }
     }
   }
 }
-
-// p(x_i | x_j, u_i, u_j) = motion model
 
 vector<Vector2f> SLAM::GetMap() {
   vector<Vector2f> map;
