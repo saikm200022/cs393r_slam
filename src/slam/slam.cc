@@ -54,6 +54,18 @@ SLAM::SLAM() :
     prev_odom_angle_(0),
     odom_initialized_(false) {}
 
+void SLAM::PrintImage(float image[x_image_width][y_image_width])
+{
+  printf("Printing Image\n");
+  for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+  {
+    for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+      printf("[ %f ]", image[pixel_x][pixel_y]);
+    
+    printf("\n");
+  }
+}
+
 void SLAM::ReinitializeCube()
 {
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -201,7 +213,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
           float y = pixel_y * y_image_incr + point[1];
 
           float prob = 1.0;
-          float std_dev = k_1 * pow(pow(x, 2) + pow(y, 2), 0.5);
+          float std_dev = 0.1 * pow(pow(x, 2) + pow(y, 2), 0.5);
 
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
           prob *= exp(-0.5 * pow((x - point[0])/std_dev, 2));
@@ -212,6 +224,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         }
       }
     }
+    PrintImage(current_image);
 
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {

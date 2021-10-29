@@ -118,6 +118,8 @@ class SLAM {
   static constexpr int y_image_width = (int) y_image_max / y_image_incr;
 
   std::vector<Eigen::Vector2f> estimated_map;
+  void PrintImage(float image[x_image_width][y_image_width]);
+
 };
 }  // namespace slam
 
