@@ -69,6 +69,7 @@ class SLAM {
   
   slam::Pose MostLikelyPose();
   void ReinitializeCube();
+  void PrintCube(int num_elems);
 
  private:
 

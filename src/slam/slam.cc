@@ -66,6 +66,29 @@ void SLAM::PrintImage(float image[x_image_width][y_image_width])
   }
 }
 
+void SLAM::PrintCube(int num_elems)
+{
+  printf("Printing Cube");
+  int printed = 0;
+  for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+  {
+    for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+    {
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+      {
+        float dx = pixel_x * x_incr;
+        float dy = pixel_y * y_incr;
+        float dtheta = pixel_theta * theta_incr;
+        printf("dx: %f dy: %f dtheta: %f --> %f\n", dx, dy, dtheta, cube[pixel_x][pixel_y][pixel_theta]);
+        printed++;
+
+        if (printed > num_elems)
+          return;
+      }
+    }
+  }
+}
+
 void SLAM::ReinitializeCube()
 {
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -224,7 +247,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         }
       }
     }
-    PrintImage(current_image);
+    // PrintImage(current_image);
 
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
@@ -271,6 +294,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta = best_pose.delta_theta;
     previous_pose = best_pose;
+    PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
   }
 
