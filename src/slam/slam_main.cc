@@ -100,6 +100,7 @@ void PublishMap() {
   const vector<Vector2f> map = slam_.GetMap();
   printf("Map: %lu points\n", map.size());
   for (const Vector2f& p : map) {
+    // printf("POINT: %f, %f\n", p[0], p[1]);
     visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
   }
   visualization_publisher_.publish(vis_msg_);
@@ -109,6 +110,7 @@ void PublishPose() {
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
   slam_.GetPose(&robot_loc, &robot_angle);
+  printf("POSE: %f, %f, %f\n", robot_loc[0], robot_loc[1], robot_angle);
   amrl_msgs::Localization2DMsg localization_msg;
   localization_msg.pose.x = robot_loc.x();
   localization_msg.pose.y = robot_loc.y();

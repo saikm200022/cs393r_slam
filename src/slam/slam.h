@@ -68,6 +68,7 @@ class SLAM {
                         float angle_max);
   
   slam::Pose MostLikelyPose();
+  void ReinitializeCube();
 
  private:
 
@@ -80,9 +81,9 @@ class SLAM {
   float k_2 = 2;
   float laser_off = 0.2;
 
-  float distance_travelled_og = 0.5; 
+  float distance_travelled_og = 0.0; 
   float distance_travelled = distance_travelled_og;
-  float angle_travelled_og = 0.45;
+  float angle_travelled_og = 0.0;
   float angle_travelled = angle_travelled_og;
 
   // negative displacements?

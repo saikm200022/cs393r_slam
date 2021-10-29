@@ -54,10 +54,18 @@ SLAM::SLAM() :
     prev_odom_angle_(0),
     odom_initialized_(false) {}
 
+void SLAM::ReinitializeCube()
+{
+  for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+    for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+          cube[pixel_x][pixel_y][pixel_theta] = 1.0;
+}
+
 struct Pose SLAM::MostLikelyPose()
 {
   // If the first pose, the cumulative transformations are all 0 therefore best pose is dx = 0, dy = 0, dtheta = 0
-   if (cumulative_transform.delta_x == 0 && cumulative_transform.delta_y == 0 && cumulative_transform.delta_theta == 0)
+   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
   {
     struct Pose first_pose = {
       0, 0, 0, 0
@@ -164,6 +172,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // For initial pose
   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
   {
+        // printf("INITIAL**************");
     previous_pose.delta_x = 0;
     previous_pose.delta_y = 0;
     previous_pose.delta_theta = 0;
@@ -175,6 +184,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0 || angle_travelled <= 0)
   { 
+    // printf("OTHER**************");
     float current_image[x_image_width][y_image_width];
     vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
 
@@ -248,6 +258,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta = best_pose.delta_theta;
     previous_pose = best_pose;
+    ReinitializeCube();
   }
 
   // Transform current robot scan to previous pose
