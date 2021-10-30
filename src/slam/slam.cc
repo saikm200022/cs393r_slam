@@ -33,6 +33,8 @@
 #include "slam.h"
 
 #include "vector_map/vector_map.h"
+#include <stdexcept>
+
 
 using namespace math_util;
 using Eigen::Affine2f;
@@ -68,7 +70,7 @@ void SLAM::PrintImage(float image[x_image_width][y_image_width])
 
 void SLAM::PrintCube(int num_elems)
 {
-  printf("Printing Cube");
+  printf("Printing Cube\n");
   int printed = 0;
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
   {
@@ -195,6 +197,28 @@ vector<Vector2f> SLAM::GetScanPointCloud(const vector<float>& ranges,
     return points;
   }
 
+void SLAM::GetBoundingBox(float bounds[4])
+{
+  float xmin = 10000000000000000;
+  float ymin = 10000000000000000;
+  float xmax = -1000000000000000;
+  float ymax = -1000000000000000;
+
+  for (auto& point : previous_scan)
+  {
+    xmin = std::min(point[0], xmin);
+    ymin = std::min(point[1], ymin);
+    xmax = std::max(point[0], xmax);
+    ymax = std::max(point[1], ymax);
+  }
+
+  bounds[0] = xmin;
+  bounds[1] = xmax;
+  bounds[2] = ymin;
+  bounds[3] = ymax;
+  // printf("BOUNDS: %f %f %f %f", xmin, xmax, ymin, ymax);
+} 
+
 // x_2 = current
 // x_1 previous
 
@@ -219,6 +243,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     previous_pose.delta_theta = 0;
     vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
     previous_scan = points;
+    ReinitializeCube();
     return;
   }
 
@@ -228,39 +253,56 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     float current_image[x_image_width][y_image_width];
     InitializeImage(current_image);
     // PrintImage(current_image);
-    vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
+    float bounds[4];
+    GetBoundingBox(bounds);
+    float xmin = bounds[0];
+    float xmax = bounds[1];
+    float ymin = bounds[2];
+    float ymax = bounds[3];
+    float temp_image[(int) (xmax - xmin + image_disp)][(int) (ymax - ymin + image_disp)];
+    for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
+      for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
+        temp_image[x][y] = 0;
 
-    // Create Image by Centering gaussians around previous laser scan points
-    for (auto& point : previous_scan)
+    for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
     {
-      // printf("ITERATION\n");
-      // PrintImage(current_image);
-      // pixel_x and pixel_y are bin indices in the image
-      for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+      for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
       {
-        for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
-        {
-          // Take left corner of every pixel
-          float x = pixel_x * x_image_incr + point[0];
-          float y = pixel_y * y_image_incr + point[1];
+        float x_val = x + xmin;
+        float y_val = y + ymin;
 
+        for (auto& point : previous_scan)
+        {
           float prob = 1.0;
-          float std_dev = 0.1 * pow(pow(x, 2) + pow(y, 2), 0.5);
+          float x_diff = x - point[0];
+          float y_diff = y - point[1];
+
+          float std_dev = 0.02 * pow(pow(x_diff, 2) + pow(y_diff, 2), 0.5);
 
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-          prob *= exp(-0.5 * pow((x - point[0])/std_dev, 2));
-          prob *= exp(-0.5 * pow((y - point[1])/std_dev, 2));
+          prob *= exp(-0.5 * pow((x_val - point[0])/std_dev, 2));
+          prob *= exp(-0.5 * pow((y_val - point[1])/std_dev, 2));
           // printf("PROB: %f\n", prob);
           // printf("dx: %f dy: %f PROB: %f\n", x - point[0], y- point[1], prob);
           // Sum of Gaussians 
-          current_image[pixel_x][pixel_y] += prob;
-          // if (current_image[pixel_x][pixel_y] >= 1.0)
-          //   current_image[pixel_x][pixel_y] = 1.0;
+          temp_image[x][y] += prob;
+          if (temp_image[x][y] >= 1.0)
+            temp_image[x][y] = 1.0;
         }
       }
     }
-    PrintImage(current_image);
-    printf("LENGTH: %lu\n", previous_scan.size());
+
+    // for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
+    // {
+    //   for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
+    //   {
+    //     printf("%f ", temp_image[x][y]);
+    //   }
+    //   printf("\n");
+    // }
+    vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
+    float obsv[x_width][y_width][theta_width];
+
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
       for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
@@ -283,21 +325,28 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y + dy;
 
             shifted_points.push_back(Vector2f(final_x, final_y));
+            float score = 1.0;
+            for (auto& point : shifted_points)
+            {
+              int point_pixel_x = point[0] - xmin;
+              int point_pixel_y = point[1] - ymin;
+
+              if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
+                continue;
+
+              score = temp_image[point_pixel_x][point_pixel_y];
+            }
+            // printf("SCORE: %f\n", score);
+            obsv[pixel_x][pixel_y][pixel_theta] = std::max(score, score);
           }
-          
-          // Calculate score by using gaussian values from image
-          float score = 1.0;
-          for (auto& point : shifted_points)
-          {
-            int point_pixel_x = point[0] / x_incr;
-            int point_pixel_y = point[1] / y_incr;
-            score *= current_image[point_pixel_x][point_pixel_y];
-          }
-          // printf("\nSCORE: %f\n", score);
-          cube[pixel_x][pixel_y][pixel_theta] = std::max(cube[pixel_x][pixel_y][pixel_theta], score);
         }
       }
     }
+
+    for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+      for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+        for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+          cube[pixel_x][pixel_y][pixel_theta] *= obsv[pixel_x][pixel_y][pixel_theta];
 
     // Update all necessary global variables
     previous_scan = points;
@@ -306,7 +355,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta = best_pose.delta_theta;
     previous_pose = best_pose;
-    // PrintCube(x_width * y_width * theta_width);
+    PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
   }
 

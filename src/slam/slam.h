@@ -70,6 +70,8 @@ class SLAM {
   slam::Pose MostLikelyPose();
   void ReinitializeCube();
   void PrintCube(int num_elems);
+  void GetBoundingBox(float bounds[4]);
+
  private:
 
   // Previous odometry-reported locations.
@@ -85,6 +87,8 @@ class SLAM {
   float distance_travelled = distance_travelled_og;
   float angle_travelled_og = 0.0;
   float angle_travelled = angle_travelled_og;
+
+  int image_disp = 1;
 
   // negative displacements?
 
