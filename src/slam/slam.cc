@@ -89,6 +89,13 @@ void SLAM::PrintCube(int num_elems)
   }
 }
 
+void SLAM::InitializeImage(float image[x_image_width][y_image_width])
+{
+  for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+    for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+      image[pixel_x][pixel_y] = 0.0;
+}
+
 void SLAM::ReinitializeCube()
 {
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -207,7 +214,6 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // For initial pose
   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
   {
-        // printf("INITIAL**************");
     previous_pose.delta_x = 0;
     previous_pose.delta_y = 0;
     previous_pose.delta_theta = 0;
@@ -219,13 +225,16 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0 || angle_travelled <= 0)
   { 
-    // printf("OTHER**************");
     float current_image[x_image_width][y_image_width];
+    InitializeImage(current_image);
+    // PrintImage(current_image);
     vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
 
     // Create Image by Centering gaussians around previous laser scan points
     for (auto& point : previous_scan)
     {
+      // printf("ITERATION\n");
+      // PrintImage(current_image);
       // pixel_x and pixel_y are bin indices in the image
       for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
       {
@@ -241,14 +250,17 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
           prob *= exp(-0.5 * pow((x - point[0])/std_dev, 2));
           prob *= exp(-0.5 * pow((y - point[1])/std_dev, 2));
-
+          // printf("PROB: %f\n", prob);
+          // printf("dx: %f dy: %f PROB: %f\n", x - point[0], y- point[1], prob);
           // Sum of Gaussians 
           current_image[pixel_x][pixel_y] += prob;
+          // if (current_image[pixel_x][pixel_y] >= 1.0)
+          //   current_image[pixel_x][pixel_y] = 1.0;
         }
       }
     }
-    // PrintImage(current_image);
-
+    PrintImage(current_image);
+    printf("LENGTH: %lu\n", previous_scan.size());
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
       for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
@@ -267,8 +279,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
 
             // Forward shift by dx, dy, dtheta
-            float final_x = cos(dtheta) * new_x - sin(dtheta) * new_y - dx;
-            float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y - dy;
+            float final_x = cos(dtheta) * new_x - sin(dtheta) * new_y + dx;
+            float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y + dy;
 
             shifted_points.push_back(Vector2f(final_x, final_y));
           }
@@ -281,8 +293,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             int point_pixel_y = point[1] / y_incr;
             score *= current_image[point_pixel_x][point_pixel_y];
           }
-
-          cube[pixel_x][pixel_y][pixel_theta] *= score;
+          // printf("\nSCORE: %f\n", score);
+          cube[pixel_x][pixel_y][pixel_theta] = std::max(cube[pixel_x][pixel_y][pixel_theta], score);
         }
       }
     }
@@ -294,7 +306,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta = best_pose.delta_theta;
     previous_pose = best_pose;
-    PrintCube(x_width * y_width * theta_width);
+    // PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
   }
 
@@ -340,7 +352,8 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
         prob *= exp(-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
 
         // Motion model probability
-        cube[pixel_x][pixel_y][pixel_theta] *= prob;
+        // cube[pixel_x][pixel_y][pixel_theta] *= prob;
+        // PrintCube(x_width * y_width * theta_width);
       }
     }
   }

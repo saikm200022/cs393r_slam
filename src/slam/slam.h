@@ -70,7 +70,6 @@ class SLAM {
   slam::Pose MostLikelyPose();
   void ReinitializeCube();
   void PrintCube(int num_elems);
-
  private:
 
   // Previous odometry-reported locations.
@@ -120,6 +119,7 @@ class SLAM {
 
   std::vector<Eigen::Vector2f> estimated_map;
   void PrintImage(float image[x_image_width][y_image_width]);
+  void InitializeImage(float image[x_image_width][y_image_width]);
 
 };
 }  // namespace slam
