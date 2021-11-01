@@ -355,7 +355,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta = best_pose.delta_theta;
     previous_pose = best_pose;
-    PrintCube(x_width * y_width * theta_width);
+    // PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
   }
 
@@ -419,10 +419,10 @@ vector<Vector2f> SLAM::GetMap() {
     // Transform point to reference frame of pose 1
     float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
     float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
-    map.push_back(Vector2f(new_x, new_y));
+    estimated_map.push_back(Vector2f(new_x, new_y));
   }
 
-  return map;
+  return estimated_map;
 }
 
 }  // namespace slam
