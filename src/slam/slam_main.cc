@@ -110,7 +110,7 @@ void PublishPose() {
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
   slam_.GetPose(&robot_loc, &robot_angle);
-  // printf("POSE: %f, %f, %f\n", robot_loc[0], robot_loc[1], robot_angle);
+  printf("POSE: %f, %f, %f\n", robot_loc[0], robot_loc[1], robot_angle);
   amrl_msgs::Localization2DMsg localization_msg;
   localization_msg.pose.x = robot_loc.x();
   localization_msg.pose.y = robot_loc.y();
