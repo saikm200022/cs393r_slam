@@ -132,7 +132,7 @@ struct Pose SLAM::MostLikelyPose()
     {
       for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
       {
-          if (most_likely < cube[pixel_x][pixel_y][pixel_theta])
+          if (most_likely <= cube[pixel_x][pixel_y][pixel_theta])
           {
             best_x = pixel_x * x_incr;
             best_y = pixel_y * y_incr;
@@ -234,7 +234,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // A new laser scan has been observed. Decide whether to add it as a pose
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
-  
+
   // For initial pose
   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
   {
@@ -248,8 +248,10 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   }
 
   // If conditions met (0.5 m dist or 45 degrees rotated)
-  if (distance_travelled <= 0 || angle_travelled <= 0)
+  if (distance_travelled <= 0.0 || angle_travelled <= 0)
   { 
+        printf("Laser\n");
+
     float current_image[x_image_width][y_image_width];
     InitializeImage(current_image);
     // PrintImage(current_image);
@@ -357,6 +359,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     previous_pose = best_pose;
     // PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
+    distance_travelled = distance_travelled_og;
+    angle_travelled = angle_travelled_og;
   }
 
   // Transform current robot scan to previous pose
@@ -374,12 +378,24 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
     odom_initialized_ = true;
     return;
   }
+
+  printf("ODOM\n");
+
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
+
+  ReinitializeCube();
 
   // Not sure this is correct (maybe too simple?)
   Vector2f translation_hat = odom_loc - prev_odom_loc_;
   float angle_hat = odom_angle - prev_odom_angle_;
+  printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+  printf("DIST: %f\n", distance_travelled);
+  distance_travelled -= abs(translation_hat[0] + translation_hat[1]);
+  angle_hat -= abs(angle_hat);
+
+  prev_odom_angle_ = odom_angle;
+    prev_odom_loc_ = odom_loc;
 
   // Try out all possible delta x, y, theta
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -399,13 +415,13 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
         prob *= exp(-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
         prob *= exp(-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
         prob *= exp(-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
-
+        // printf("PROB: %f\n", prob);
         // Motion model probability
-        // cube[pixel_x][pixel_y][pixel_theta] *= prob;
-        // PrintCube(x_width * y_width * theta_width);
+        cube[pixel_x][pixel_y][pixel_theta] *= prob;
       }
     }
   }
+  // PrintCube(5);
 }
 
 vector<Vector2f> SLAM::GetMap() {
@@ -417,8 +433,8 @@ vector<Vector2f> SLAM::GetMap() {
   for (auto& point : previous_scan)
   {
     // Transform point to reference frame of pose 1
-    float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
-    float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
+    float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
+    float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
     estimated_map.push_back(Vector2f(new_x, new_y));
   }
 

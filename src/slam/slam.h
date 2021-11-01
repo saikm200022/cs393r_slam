@@ -79,13 +79,13 @@ class SLAM {
   float prev_odom_angle_;
   bool odom_initialized_;
 
-  float k_1 = 2;
-  float k_2 = 2;
+  float k_1 = 0.1;
+  float k_2 = 0.1;
   float laser_off = 0.2;
 
-  float distance_travelled_og = 0.0; 
+  float distance_travelled_og = 0.5; 
   float distance_travelled = distance_travelled_og;
-  float angle_travelled_og = 0.0;
+  float angle_travelled_og = 0.5;
   float angle_travelled = angle_travelled_og;
 
   int image_disp = 1;
