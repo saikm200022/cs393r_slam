@@ -34,7 +34,7 @@ struct Pose {
   float delta_x;
   float delta_y;
   float delta_theta;
-  float probability;
+  double probability;
 };
 
 class SLAM {
@@ -83,7 +83,7 @@ class SLAM {
   float k_2 = 0.1;
   float laser_off = 0.2;
 
-  float distance_travelled_og = 0.0; 
+  float distance_travelled_og = 0.5; 
   float distance_travelled = distance_travelled_og;
   float angle_travelled_og = 0.5;
   float angle_travelled = angle_travelled_og;
@@ -104,7 +104,7 @@ class SLAM {
   static constexpr int y_width = (int) y_max / y_incr;
   static constexpr int theta_width = (int) theta_max / theta_incr;
 
-  float cube[x_width][y_width][theta_width];
+  double cube[x_width][y_width][theta_width];
   slam::Pose previous_pose = {
     -1000, -1000, -1000, 0.0
   };
