@@ -88,7 +88,7 @@ class SLAM {
   float angle_travelled_og = 0.5;
   float angle_travelled = angle_travelled_og;
 
-  int image_disp = 1;
+  int image_disp = 10;
 
   // negative displacements?
 

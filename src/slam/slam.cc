@@ -270,8 +270,8 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     {
       for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
       {
-        float x_val = x + xmin;
-        float y_val = y + ymin;
+        float x_val = (xmax + image_disp) - x;
+        float y_val = (ymax + image_disp) - y;
 
         for (auto& point : previous_scan)
         {
@@ -330,15 +330,17 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             float score = 1.0;
             for (auto& point : shifted_points)
             {
-              int point_pixel_x = point[0] - xmin;
-              int point_pixel_y = point[1] - ymin;
+              int point_pixel_x = (xmax - xmin + image_disp) - (point[0] - xmin);
+              int point_pixel_y = (ymax - ymin + image_disp) - (point[1] - ymin);
 
               if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
                 continue;
 
+              // Not multiplying
               score = temp_image[point_pixel_x][point_pixel_y];
             }
             // printf("SCORE: %f\n", score);
+            // Not properly taking max
             obsv[pixel_x][pixel_y][pixel_theta] = std::max(score, score);
           }
         }
@@ -433,8 +435,8 @@ vector<Vector2f> SLAM::GetMap() {
   for (auto& point : previous_scan)
   {
     // Transform point to reference frame of pose 1
-    float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
-    float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
+    float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
+    float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
     estimated_map.push_back(Vector2f(new_x, new_y));
   }
 
