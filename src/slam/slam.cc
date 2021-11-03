@@ -41,6 +41,8 @@ using Eigen::Affine2f;
 using Eigen::Rotation2Df;
 using Eigen::Translation2f;
 using Eigen::Vector2f;
+using Eigen::Vector3f;
+using Eigen::Matrix3f;
 using Eigen::Vector2i;
 using std::cout;
 using std::endl;
@@ -62,6 +64,18 @@ void SLAM::PrintImage(float image[x_image_width][y_image_width])
   for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
   {
     for (int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+      printf("[ %f ]", image[pixel_x][pixel_y]);
+    
+    printf("\n");
+  }
+}
+
+void SLAM::PrintImageVariable(vector<vector<float>> image)
+{
+  printf("Printing Image\n");
+  for (unsigned pixel_x = 0; pixel_x < image.size(); pixel_x++)
+  {
+    for (unsigned pixel_y = 0; pixel_y < image[pixel_x].size(); pixel_y++)
       printf("[ %f ]", image[pixel_x][pixel_y]);
     
     printf("\n");
@@ -219,6 +233,33 @@ void SLAM::GetBoundingBox(float bounds[4])
   // printf("BOUNDS: %f %f %f %f", xmin, xmax, ymin, ymax);
 } 
 
+// Eigen::Matrix3f SLAM::GetTransform(float dx, float dy, float dtheta) {
+//   auto rot = GetRotationMatrix(dtheta);
+//   Matrix3f transform;
+//   transform.block(0,0,2,2) = rot.transpose();
+//   transform(0,2) = -dx;
+//   transform(1,2) = -dy;
+//   transform(2,2) = 1;
+
+//   return transform;
+// }
+
+// Go from a point in the basis given by dx dy dtheta to 0,0,0
+Eigen::Vector2f SLAM::TransformFromBase(Eigen::Vector2f point, float dx, float dy, float dtheta) {
+  auto rot = GetRotationMatrix(dtheta);
+  Vector2f translation (dx, dy);
+
+  return rot*point + translation;
+}
+
+// Go from a point in 0,0,0 to basis given by dx dy dtheta
+Eigen::Vector2f SLAM::TransformToBase(Eigen::Vector2f point, float dx, float dy, float dtheta) {
+  auto rot = GetRotationMatrix(-dtheta);
+  Vector2f translation (-dx, -dy);
+
+  return rot* (point + translation);
+}
+
 // x_2 = current
 // x_1 previous
 
@@ -235,6 +276,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
 
+  // printf("In observe laser\n");
   // For initial pose
   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
   {
@@ -247,28 +289,32 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     return;
   }
 
+  // printf("Check 1\n");
+
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0.0 || angle_travelled <= 0)
   { 
-        printf("Laser\n");
-
-    float current_image[x_image_width][y_image_width];
-    InitializeImage(current_image);
-    // PrintImage(current_image);
+    distance_travelled = distance_travelled_og;
+    angle_travelled = angle_travelled_og;
     float bounds[4];
     GetBoundingBox(bounds);
     float xmin = bounds[0];
     float xmax = bounds[1];
     float ymin = bounds[2];
     float ymax = bounds[3];
-    float temp_image[(int) (xmax - xmin + image_disp)][(int) (ymax - ymin + image_disp)];
-    for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
-      for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
+    unsigned x_size = (int) (xmax - xmin + image_disp);
+    unsigned y_size = (int) (ymax - ymin + image_disp);
+    vector<vector<float>> temp_image = vector<vector<float>>(x_size, vector<float>(y_size));
+
+    for (unsigned int x = 0; x < x_size; x++)
+      for (unsigned int y = 0; y < y_size; y++)
         temp_image[x][y] = 0;
 
-    for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
+  // printf("Check 2\n");
+
+    for (unsigned int x = 0; x < x_size; x++)
     {
-      for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
+      for (unsigned int y = 0; y < y_size; y++)
       {
         float x_val = x + xmin;
         float y_val = y + ymin;
@@ -293,6 +339,9 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         }
       }
     }
+  // printf("Check 3\n");
+
+    // PrintImageVariable(temp_image);
 
     // for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
     // {
@@ -302,8 +351,15 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     //   }
     //   printf("\n");
     // }
+
     vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
+
+    // This only works if dims are known at compile time
+    
     float obsv[x_width][y_width][theta_width];
+
+    // If we want to pass this anywhere or vary the dimensions, we have to do this
+    // vector<vector<vector<float>>> obsv = vector<vector<vector<float>>>(x_size, vector<vector<float>>(y_size, vector<float>(theta_width)));
 
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
@@ -315,23 +371,33 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
           float dy = pixel_y * y_incr;
           float dtheta = pixel_theta * theta_incr;
 
+          // Transform matrix
+          // auto transform = GetTransform(dx, dy, dtheta);
+
+
+
           vector<Vector2f> shifted_points;
-          for (auto& point : points)
+          for (unsigned i = 0; i < points.size(); i+=10)
           {
-            // Shift point to previous pose
-            float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
-            float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
+            auto point = points[i];
+            // // Shift point to previous pose
+            // float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
+            // float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
 
-            // Forward shift by dx, dy, dtheta
-            float final_x = cos(dtheta) * new_x - sin(dtheta) * new_y + dx;
-            float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y + dy;
+            // // Forward shift by dx, dy, dtheta
+            // float final_x = cos(dtheta) * new_x - sin(dtheta) * new_y + dx;
+            // float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y + dy;
 
-            shifted_points.push_back(Vector2f(final_x, final_y));
+            // Vector3f point3 (point[0], point[1], 1);
+            Vector2f shifted_point = TransformFromBase(point, dx, dy, dtheta);
+
+
+            shifted_points.push_back(Vector2f(shifted_point[0], shifted_point[1]));
             float score = 1.0;
-            for (auto& point : shifted_points)
+            for (auto& s_point : shifted_points)
             {
-              int point_pixel_x = point[0] - xmin;
-              int point_pixel_y = point[1] - ymin;
+              int point_pixel_x = s_point[0] - xmin;
+              int point_pixel_y = s_point[1] - ymin;
 
               if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
                 continue;
@@ -344,6 +410,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         }
       }
     }
+  // printf("Check 4\n");
 
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
       for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
@@ -357,11 +424,28 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta = best_pose.delta_theta;
     previous_pose = best_pose;
+  // printf("Check 5 - adding new points to map\n");
+
+
+    printf("Adding scan from pose: %lf %lf %lf\n", cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
+    
+    for (auto& point : previous_scan)
+    {
+    // Transform point to reference frame of pose 1
+    // float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
+    // float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
+
+      Vector2f trans_point = TransformFromBase(point, cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
+      
+      estimated_map.push_back(trans_point);
+    }
+
     // PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
-    distance_travelled = distance_travelled_og;
-    angle_travelled = angle_travelled_og;
   }
+
+  // printf("Done with observe laser\n");
+
 
   // Transform current robot scan to previous pose
   // Create image for current scan
@@ -379,7 +463,10 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
     return;
   }
 
-  printf("ODOM\n");
+  // printf("In observe odom\n");
+
+
+  // printf("ODOM\n");
 
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
@@ -389,13 +476,16 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   // Not sure this is correct (maybe too simple?)
   Vector2f translation_hat = odom_loc - prev_odom_loc_;
   float angle_hat = odom_angle - prev_odom_angle_;
-  printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
-  printf("DIST: %f\n", distance_travelled);
-  distance_travelled -= abs(translation_hat[0] + translation_hat[1]);
-  angle_hat -= abs(angle_hat);
+  // printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+  // printf("DIST: %f\n", distance_travelled);
+  // printf("ANGLE: %f\n", distance_travelled);
+
+
+  distance_travelled -= abs(translation_hat.norm());
+  angle_travelled -= abs(angle_hat);
 
   prev_odom_angle_ = odom_angle;
-    prev_odom_loc_ = odom_loc;
+  prev_odom_loc_ = odom_loc;
 
   // Try out all possible delta x, y, theta
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -421,22 +511,27 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
       }
     }
   }
+  // printf("Done with observe odom\n");
+
   // PrintCube(5);
 }
 
 vector<Vector2f> SLAM::GetMap() {
-  vector<Vector2f> map;
+  printf("In get map");
   // Reconstruct the map as a single aligned point cloud from all saved poses
   // and their respective scans.
 
   // For all points in previous scan, apply cumulative transformation to convert points to reference frame of pose 1
-  for (auto& point : previous_scan)
-  {
-    // Transform point to reference frame of pose 1
-    float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
-    float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
-    estimated_map.push_back(Vector2f(new_x, new_y));
-  }
+  // for (auto& point : previous_scan)
+  // {
+  //   // Transform point to reference frame of pose 1
+  //   // float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
+  //   // float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
+
+  //   Vector2f trans_point = TransformFromBase(point, cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
+
+  //   estimated_map.push_back(trans_point);
+  // }
 
   return estimated_map;
 }

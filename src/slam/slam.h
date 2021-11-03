@@ -28,6 +28,8 @@
 #ifndef SRC_SLAM_H_
 #define SRC_SLAM_H_
 
+using namespace std;
+
 namespace slam {
 
 struct Pose {
@@ -74,6 +76,8 @@ class SLAM {
 
  private:
 
+  int quit = 0;
+
   // Previous odometry-reported locations.
   Eigen::Vector2f prev_odom_loc_;
   float prev_odom_angle_;
@@ -113,6 +117,12 @@ class SLAM {
   };
   slam::Pose best_pose;
   std::vector<Eigen::Vector2f> previous_scan;
+
+  std::vector<Eigen::Matrix3f> poses;
+  Eigen::Matrix3f GetTransform(float dx, float dy, float dtheta);
+  Eigen::Vector2f TransformFromBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
+  Eigen::Vector2f TransformToBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
+
   
   static constexpr float x_image_incr = 0.5;
   static constexpr float y_image_incr = 0.5;
@@ -123,6 +133,8 @@ class SLAM {
 
   std::vector<Eigen::Vector2f> estimated_map;
   void PrintImage(float image[x_image_width][y_image_width]);
+  void PrintImageVariable(vector<vector<float>> image);
+
   void InitializeImage(float image[x_image_width][y_image_width]);
 
 };
