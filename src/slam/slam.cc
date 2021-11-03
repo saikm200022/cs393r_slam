@@ -49,6 +49,12 @@ using std::swap;
 using std::vector;
 using vector_map::VectorMap;
 
+const float kEpsilon = 1e-5;
+
+bool fEquals (float a, float b) {
+  return (a >= b - kEpsilon && a <= b + kEpsilon);
+}
+
 namespace slam {
 
 SLAM::SLAM() :
@@ -103,7 +109,7 @@ void SLAM::ReinitializeCube()
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
       for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
-          cube[pixel_x][pixel_y][pixel_theta] = 1.0;
+          cube[pixel_x][pixel_y][pixel_theta] = 0.0;
 }
 
 struct Pose SLAM::MostLikelyPose()
@@ -123,7 +129,7 @@ struct Pose SLAM::MostLikelyPose()
   float best_x = 0.0;
   float best_y = 0.0;
   float best_theta = 0.0;
-  float most_likely = -1.0;
+  float most_likely = -1000000000000000000000000000000.0;
 
   // Consult cube to find displacement that results in most likely pose
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -132,7 +138,7 @@ struct Pose SLAM::MostLikelyPose()
     {
       for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
       {
-          if (most_likely <= cube[pixel_x][pixel_y][pixel_theta])
+          if (most_likely < cube[pixel_x][pixel_y][pixel_theta])
           {
             best_x = pixel_x * x_incr;
             best_y = pixel_y * y_incr;
@@ -145,6 +151,7 @@ struct Pose SLAM::MostLikelyPose()
   struct Pose new_pose = {
     best_x, best_y, best_theta, most_likely
   };
+  printf("BEST POSE: %f %f %f\n", best_x, best_y, best_theta);
   return new_pose;
 }
 
@@ -247,7 +254,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0.0 || angle_travelled <= 0)
   { 
-    printf("Laser %f %f %f\n", previous_pose.delta_x, previous_pose.delta_y, previous_pose.probability);
+    // printf("Laser %f %f %f\n", previous_pose.delta_x, previous_pose.delta_y, previous_pose.probability);
     float current_image[x_image_width][y_image_width];
     InitializeImage(current_image);
     // PrintImage(current_image);
@@ -271,24 +278,35 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
 
         for (auto& point : previous_scan)
         {
-          float prob = 1.0;
+          float prob = 0.0;
           // float x_diff = x_val - point[0];
           // float y_diff = y_val - point[1];
           // printf("X_DIFF %f, Y_DIFF %f\n", x_diff, y_diff);
-          float std_dev = 2.0;
+          float std_dev = 1;
 
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-          prob *= exp(-0.5 * pow((x_val - point[0])/std_dev, 2));
-          prob *= exp(-0.5 * pow((y_val - point[1])/std_dev, 2));
+          prob += -0.5 * pow((x_val - point[0])/std_dev, 2);
+          prob += -0.5 * pow((y_val - point[1])/std_dev, 2);
           // printf("PROB: %f\n", prob);
           // printf("dx: %f dy: %f PROB: %f\n", x - point[0], y- point[1], prob);
           // Sum of Gaussians 
           temp_image[x][y] += prob;
-          if (temp_image[x][y] >= 1.0)
-            temp_image[x][y] = 1.0;
+          // if (temp_image[x][y] >= 1.0)
+          //   temp_image[x][y] = 1.0;
         }
       }
     }
+
+    double max = temp_image[0][0];
+    for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
+      for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
+        if (temp_image[x][y] > max && !fEquals(temp_image[x][y], 0.0))
+          max = temp_image[x][y];
+
+    // scale every weight
+    for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
+      for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
+        temp_image[x][y] -= max;
 
     // for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
     // {
@@ -300,6 +318,10 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     // }
     vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
     float obsv[x_width][y_width][theta_width];
+    for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+        for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+            for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+              obsv[pixel_x][pixel_y][pixel_theta] = -1000000000;
 
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
@@ -323,21 +345,21 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y + dy;
 
             shifted_points.push_back(Vector2f(final_x, final_y));
-            float score = 1.0;
+            float score = 0.0;
             for (auto& point : shifted_points)
             {
               int point_pixel_x = (xmax - xmin + image_disp) - (point[0] - xmin);
               int point_pixel_y = (ymax - ymin + image_disp) - (point[1] - ymin);
 
-              if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
-                continue;
+              // if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
+              //   continue;
 
               // Not multiplying
-              score *= temp_image[point_pixel_x][point_pixel_y];
+              score += temp_image[point_pixel_x][point_pixel_y];
             }
             // printf("SCORE: %f\n", score);
             // Not properly taking max
-            obsv[pixel_x][pixel_y][pixel_theta] = std::max(score, score);
+            obsv[pixel_x][pixel_y][pixel_theta] = std::max(obsv[pixel_x][pixel_y][pixel_theta], score);
           }
         }
       }
@@ -346,7 +368,10 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
       for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
         for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
-          cube[pixel_x][pixel_y][pixel_theta] *= obsv[pixel_x][pixel_y][pixel_theta];
+        {
+          cube[pixel_x][pixel_y][pixel_theta] += obsv[pixel_x][pixel_y][pixel_theta];
+          // printf("HI: %f\n", obsv[pixel_x][pixel_y][pixel_theta]);
+        }
 
     // Update all necessary global variables
     previous_scan = points;
@@ -355,7 +380,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     cumulative_transform.delta_y += best_pose.delta_y;
     cumulative_transform.delta_theta += best_pose.delta_theta;
     previous_pose = best_pose;
-    // PrintCube(x_width * y_width * theta_width);
+    // PrintCube(x_width * y_width);
     ReinitializeCube();
     distance_travelled = distance_travelled_og;
     angle_travelled = angle_travelled_og;
@@ -377,7 +402,7 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
     return;
   }
 
-  printf("ODOM %f %f\n", previous_pose.delta_x, previous_pose.delta_y);
+  // printf("ODOM %f %f\n", previous_pose.delta_x, previous_pose.delta_y);
 
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
@@ -406,16 +431,16 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
         float dy = pixel_y * y_incr;
         float dtheta = pixel_theta * theta_incr;
 
-        float prob = 1.0;
+        float prob = 0.0;
         float std_dev = k_1 * pow(pow(translation_hat[0], 2) + pow(translation_hat[1], 2), 0.5) + k_2 * (pow(angle_hat, 2));
 
         // Decoupled evaluation of multivariate gaussian where product is taken along x, y, and theta
-        prob *= exp(-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
-        prob *= exp(-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
-        prob *= exp(-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
+        prob += exp(-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
+        prob += exp(-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
+        prob += exp(-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
         // printf("PROB: %f\n", prob);
         // Motion model probability
-        cube[pixel_x][pixel_y][pixel_theta] *= prob;
+        cube[pixel_x][pixel_y][pixel_theta] += prob;
       }
     }
   }
