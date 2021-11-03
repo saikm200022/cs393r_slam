@@ -153,9 +153,6 @@ void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   *loc = Vector2f(0, 0);
   *angle = 0;
   
-  if (best_pose.delta_x == 0 && best_pose.delta_y == 0 && best_pose.delta_theta == 0)
-    return;
-  
   // Find best pose with respect to pose 1 (using the cumulative_transform variable)
   *loc = Vector2f(cumulative_transform.delta_x, cumulative_transform.delta_y);
   *angle += cumulative_transform.delta_theta;
@@ -250,8 +247,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0.0 || angle_travelled <= 0)
   { 
-        printf("Laser\n");
-
+    printf("Laser %f %f %f\n", previous_pose.delta_x, previous_pose.delta_y, previous_pose.probability);
     float current_image[x_image_width][y_image_width];
     InitializeImage(current_image);
     // PrintImage(current_image);
@@ -276,10 +272,10 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
         for (auto& point : previous_scan)
         {
           float prob = 1.0;
-          float x_diff = x - point[0];
-          float y_diff = y - point[1];
-
-          float std_dev = 0.02 * pow(pow(x_diff, 2) + pow(y_diff, 2), 0.5);
+          // float x_diff = x_val - point[0];
+          // float y_diff = y_val - point[1];
+          // printf("X_DIFF %f, Y_DIFF %f\n", x_diff, y_diff);
+          float std_dev = 2.0;
 
           // Decoupled evaluation of multivariate gaussian where product is taken along x and y
           prob *= exp(-0.5 * pow((x_val - point[0])/std_dev, 2));
@@ -337,7 +333,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
                 continue;
 
               // Not multiplying
-              score = temp_image[point_pixel_x][point_pixel_y];
+              score *= temp_image[point_pixel_x][point_pixel_y];
             }
             // printf("SCORE: %f\n", score);
             // Not properly taking max
@@ -357,7 +353,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     best_pose = MostLikelyPose();
     cumulative_transform.delta_x += best_pose.delta_x;
     cumulative_transform.delta_y += best_pose.delta_y;
-    cumulative_transform.delta_theta = best_pose.delta_theta;
+    cumulative_transform.delta_theta += best_pose.delta_theta;
     previous_pose = best_pose;
     // PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
@@ -381,7 +377,7 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
     return;
   }
 
-  printf("ODOM\n");
+  printf("ODOM %f %f\n", previous_pose.delta_x, previous_pose.delta_y);
 
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
@@ -391,9 +387,9 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   // Not sure this is correct (maybe too simple?)
   Vector2f translation_hat = odom_loc - prev_odom_loc_;
   float angle_hat = odom_angle - prev_odom_angle_;
-  printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+  // printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
   printf("DIST: %f\n", distance_travelled);
-  distance_travelled -= abs(translation_hat[0] + translation_hat[1]);
+  distance_travelled -= (odom_loc - prev_odom_loc_).norm();
   angle_hat -= abs(angle_hat);
 
   prev_odom_angle_ = odom_angle;
