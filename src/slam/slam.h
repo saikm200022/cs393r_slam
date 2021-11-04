@@ -105,6 +105,8 @@ class SLAM {
   static constexpr int theta_width = (int) theta_max / theta_incr;
 
   double cube[x_width][y_width][theta_width];
+  double cube_temp[x_width][y_width][theta_width];
+
   slam::Pose previous_pose = {
     -1000, -1000, -1000, 0.0
   };
@@ -124,6 +126,10 @@ class SLAM {
   std::vector<Eigen::Vector2f> estimated_map;
   void PrintImage(float image[x_image_width][y_image_width]);
   void InitializeImage(float image[x_image_width][y_image_width]);
+
+  Eigen::Vector2f TransformFromBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
+  Eigen::Vector2f TransformToBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
+
 
 };
 }  // namespace slam
