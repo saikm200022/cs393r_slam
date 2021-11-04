@@ -97,14 +97,14 @@ class SLAM {
 
   static constexpr float x_incr = 0.01;
   static constexpr float y_incr = 0.01;
-  static constexpr float theta_incr = 0.01; 
+  static constexpr float theta_incr = 0.005; 
  
   static constexpr float x_max = 1;
   static constexpr float y_max = 1;
-  static constexpr float theta_max = M_PI/2; 
+  static constexpr float theta_max = M_PI/4; 
   static constexpr float x_min = -1;
   static constexpr float y_min = -1;
-  static constexpr float theta_min = -M_PI/2; 
+  static constexpr float theta_min = -M_PI/4; 
 
   static constexpr int x_width = (int) (x_max - x_min) / x_incr;
   static constexpr int y_width = (int) (y_max - y_min) / y_incr;

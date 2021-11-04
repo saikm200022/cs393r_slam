@@ -506,7 +506,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
       // float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
       // float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
 
-      Vector2f shifted_point = TransformFromBase(point, cumulative_transform.delta_x, cumulative_transform.delta_x, cumulative_transform.delta_theta);
+      Vector2f shifted_point = TransformFromBase(point, cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
 
       estimated_map.push_back(shifted_point);
     }
