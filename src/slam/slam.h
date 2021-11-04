@@ -88,24 +88,30 @@ class SLAM {
   float angle_travelled_og = 0.5;
   float angle_travelled = angle_travelled_og;
 
+  Eigen::Vector2f p_odom_vector;
+  float p_odom_angle;
+
   int image_disp = 10;
 
   // negative displacements?
 
-  static constexpr float x_incr = 0.5;
-  static constexpr float y_incr = 0.5;
-  static constexpr float theta_incr = 0.1; 
+  static constexpr float x_incr = 0.01;
+  static constexpr float y_incr = 0.01;
+  static constexpr float theta_incr = 0.01; 
  
-  static constexpr float x_max = 3;
-  static constexpr float y_max = 3;
-  static constexpr float theta_max = 2; 
+  static constexpr float x_max = 1;
+  static constexpr float y_max = 1;
+  static constexpr float theta_max = M_PI/2; 
+  static constexpr float x_min = -1;
+  static constexpr float y_min = -1;
+  static constexpr float theta_min = -M_PI/2; 
 
-  static constexpr int x_width = (int) x_max / x_incr;
-  static constexpr int y_width = (int) y_max / y_incr;
-  static constexpr int theta_width = (int) theta_max / theta_incr;
+  static constexpr int x_width = (int) (x_max - x_min) / x_incr;
+  static constexpr int y_width = (int) (y_max - y_min) / y_incr;
+  static constexpr int theta_width = (int) (theta_max - theta_min) / theta_incr;
 
   double cube[x_width][y_width][theta_width];
-  double cube_temp[x_width][y_width][theta_width];
+  // double cube_temp[x_width][y_width][theta_width];
 
   slam::Pose previous_pose = {
     -1000, -1000, -1000, 0.0
@@ -116,8 +122,8 @@ class SLAM {
   slam::Pose best_pose;
   std::vector<Eigen::Vector2f> previous_scan;
   
-  static constexpr float x_image_incr = 0.5;
-  static constexpr float y_image_incr = 0.5;
+  static constexpr float x_image_incr = 0.1;
+  static constexpr float y_image_incr = 0.1;
   static constexpr float x_image_max = 3;
   static constexpr float y_image_max = 3;
   static constexpr int x_image_width = (int) x_image_max / x_image_incr;
@@ -129,6 +135,9 @@ class SLAM {
 
   Eigen::Vector2f TransformFromBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
   Eigen::Vector2f TransformToBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
+
+  void AddToMap(std::vector<Eigen::Vector2f>  current_scan);
+
 
 
 };

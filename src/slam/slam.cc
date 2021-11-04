@@ -60,7 +60,8 @@ namespace slam {
 SLAM::SLAM() :
     prev_odom_loc_(0, 0),
     prev_odom_angle_(0),
-    odom_initialized_(false) {}
+    p_odom_vector(0, 0),
+    p_odom_angle(0) {}
 
 void SLAM::PrintImage(float image[x_image_width][y_image_width])
 {
@@ -97,6 +98,8 @@ void SLAM::PrintCube(int num_elems)
   }
 }
 
+
+
 void SLAM::InitializeImage(float image[x_image_width][y_image_width])
 {
   for (int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
@@ -115,13 +118,13 @@ void SLAM::ReinitializeCube()
 struct Pose SLAM::MostLikelyPose()
 {
   // If the first pose, the cumulative transformations are all 0 therefore best pose is dx = 0, dy = 0, dtheta = 0
-   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
-  {
-    struct Pose first_pose = {
-      0, 0, 0, 0
-    };
-    return first_pose;
-  }
+  //  if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
+  // {
+  //   struct Pose first_pose = {
+  //     0, 0, 0, 0
+  //   };
+  //   return first_pose;
+  // }
 
   // Query 3D cube for most likely pose
   // Convert pose to map frame
@@ -139,13 +142,14 @@ struct Pose SLAM::MostLikelyPose()
       for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
       {   
           if (cube[pixel_x][pixel_y][pixel_theta] >= 0)
-            continue;
+            printf("SHOULDNT SEE THIS\n");
             
           if (most_likely < cube[pixel_x][pixel_y][pixel_theta])
           {
-            best_x = pixel_x * x_incr;
-            best_y = pixel_y * y_incr;
-            best_theta = pixel_theta * theta_incr;
+            
+            best_x = (pixel_x * x_incr) + x_min;
+            best_y = (pixel_y * y_incr) + y_min;
+            best_theta = (pixel_theta * theta_incr) + theta_min;
             most_likely = cube[pixel_x][pixel_y][pixel_theta];
           }
       }
@@ -165,7 +169,7 @@ void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   
   // Find best pose with respect to pose 1 (using the cumulative_transform variable)
   *loc = Vector2f(cumulative_transform.delta_x, cumulative_transform.delta_y);
-  *angle += cumulative_transform.delta_theta;
+  *angle = cumulative_transform.delta_theta;
 }
 
 Eigen::Matrix2f SLAM::GetRotationMatrix (const float angle) {
@@ -176,6 +180,7 @@ Eigen::Matrix2f SLAM::GetRotationMatrix (const float angle) {
   rot(1,1) = cos(angle);
   return rot;
 }
+
 
 vector<Vector2f> SLAM::GetScanPointCloud(const vector<float>& ranges,
                         float range_min,
@@ -242,6 +247,69 @@ Eigen::Vector2f SLAM::TransformToBase(Eigen::Vector2f point, float dx, float dy,
   return rot * (point + translation);
 }
 
+// Preconditions have been met - determine most likely pose and add scan to map
+void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
+  
+  printf("Adding points to map\n");
+  ReinitializeCube();
+  // Do odometry first
+  Vector2f translation_hat = p_odom_vector;
+  float angle_hat = p_odom_angle;
+  // printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+  // printf("DIST: %f\n", distance_travelled);
+
+  // Try out all possible delta x, y, theta
+  for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+  {
+    for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+    {
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+      {
+        float dx = (pixel_x * x_incr) + x_min;
+        float dy = (pixel_y * y_incr) + y_min;
+        float dtheta = (pixel_theta * theta_incr) + theta_min;
+
+        double prob = 0.0;
+        float std_dev = k_1 * pow(pow(translation_hat[0], 2) + pow(translation_hat[1], 2), 0.5) + k_2 * (pow(angle_hat, 2));
+
+        // Decoupled evaluation of multivariate gaussian where product is taken along x, y, and theta
+        prob += (-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
+        prob += (-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
+        prob += (-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
+        // printf("dx dy dt: %lf %lf %lf\n", dx, dy, dtheta);
+        // printf("PROB: %f\n", prob);
+        // Motion model probability
+        cube[pixel_x][pixel_y][pixel_theta] += prob;
+      }
+    }
+  }
+
+  previous_scan = current_scan;
+  best_pose = MostLikelyPose();
+  printf("Best pose: %lf %lf %lf\n", best_pose.delta_x, best_pose.delta_y, best_pose.delta_theta);
+  cumulative_transform.delta_x += best_pose.delta_x;
+  cumulative_transform.delta_y += best_pose.delta_y;
+  cumulative_transform.delta_theta += best_pose.delta_theta;
+  previous_pose = best_pose;
+  p_odom_vector = Vector2f(0,0);
+  p_odom_angle = 0;
+
+  printf("Odom vector: %lf %lf\tAngle: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+  printf("New pose: %lf %lf %lf\n", cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
+  // PrintCube(x_width * y_width);
+  ReinitializeCube();
+
+  for (auto& point : previous_scan)
+  {
+    // Transform point to reference frame of pose 1
+    Vector2f shifted_point = TransformFromBase(point, cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
+
+    estimated_map.push_back(shifted_point);
+  }
+
+}
+
+
 // x_2 = current
 // x_1 previous
 
@@ -258,7 +326,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
 
-  printf("Check1\n");
+  // printf("Check1\n");
 
   // For initial pose
   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
@@ -275,8 +343,18 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0.0 || angle_travelled <= 0)
   { 
+
+    vector<Vector2f> current_scan = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
+
+    AddToMap(current_scan);
     distance_travelled = distance_travelled_og;
     angle_travelled = angle_travelled_og;
+    return;
+    
+    
+  printf("Check2\n");
+
+
     // printf("Laser %f %f %f\n", previous_pose.delta_x, previous_pose.delta_y, previous_pose.probability);
 
     // PrintImage(current_image);
@@ -327,16 +405,16 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   printf("Check2\n");
 
 
-    double max = temp_image[0][0];
-    for (unsigned int x = 0; x < im_rows; x++)
-      for (unsigned int y = 0; y < im_cols; y++)
-        if (temp_image[x][y] > max && !fEquals(temp_image[x][y], 0.0))
-          max = temp_image[x][y];
+    // double max = temp_image[0][0];
+    // for (unsigned int x = 0; x < im_rows; x++)
+    //   for (unsigned int y = 0; y < im_cols; y++)
+    //     if (temp_image[x][y] > max && !fEquals(temp_image[x][y], 0.0))
+    //       max = temp_image[x][y];
 
-    // scale every weight
-    for (unsigned int x = 0; x < im_rows; x++)
-      for (unsigned int y = 0; y < im_cols; y++)
-        temp_image[x][y] -= max;
+    // // scale every weight
+    // for (unsigned int x = 0; x < im_rows; x++)
+    //   for (unsigned int y = 0; y < im_cols; y++)
+    //     temp_image[x][y] -= max;
 
     // for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
     // {
@@ -450,6 +528,17 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
     odom_initialized_ = true;
     return;
   }
+
+  // printf("Odometry: ")
+  // auto flip = (odom_loc - prev_odom_loc_);
+
+  p_odom_vector += odom_loc - prev_odom_loc_;
+  p_odom_angle += odom_angle - prev_odom_angle_;
+  distance_travelled -= (odom_loc - prev_odom_loc_).norm();
+  angle_travelled -= abs(odom_angle - prev_odom_angle_);
+  prev_odom_angle_ = odom_angle;
+  prev_odom_loc_ = odom_loc;
+  return;
 
   // printf("ODOM %f %f\n", previous_pose.delta_x, previous_pose.delta_y);
 
