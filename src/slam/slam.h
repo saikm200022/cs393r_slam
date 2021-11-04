@@ -92,17 +92,17 @@ class SLAM {
 
   // negative displacements?
 
-  static constexpr float x_incr = 0.5;
-  static constexpr float y_incr = 0.5;
-  static constexpr float theta_incr = 0.1; 
+  static constexpr float x_incr = 0.02;
+  static constexpr float y_incr = 0.02;
+  static constexpr float theta_incr = 0.01; 
  
-  static constexpr float x_max = 3;
-  static constexpr float y_max = 3;
-  static constexpr float theta_max = 2; 
+  static constexpr float x_max = 1;
+  static constexpr float y_max = 1;
+  static constexpr float theta_max = 0.1; 
 
   static constexpr int x_width = (int) x_max / x_incr;
   static constexpr int y_width = (int) y_max / y_incr;
-  static constexpr int theta_width = (int) theta_max / theta_incr;
+  static constexpr int theta_width = (int) (theta_max / theta_incr);
 
   double cube[x_width][y_width][theta_width];
   double cube_temp[x_width][y_width][theta_width];

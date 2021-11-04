@@ -154,7 +154,7 @@ struct Pose SLAM::MostLikelyPose()
   struct Pose new_pose = {
     best_x, best_y, best_theta, most_likely
   };
-  // printf("BEST POSE: %f %f %f %f\n", best_x, best_y, best_theta, most_likely);
+  printf("BEST POSE: %f %f %f %f\n", best_x, best_y, best_theta, most_likely);
   return new_pose;
 }
 
@@ -258,8 +258,6 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
 
-  printf("Check1\n");
-
   // For initial pose
   if (previous_pose.delta_x == -1000 && previous_pose.delta_y == -1000 && previous_pose.delta_theta == -1000)
   {
@@ -324,9 +322,6 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
       }
     }
 
-  printf("Check2\n");
-
-
     double max = temp_image[0][0];
     for (unsigned int x = 0; x < im_rows; x++)
       for (unsigned int y = 0; y < im_cols; y++)
@@ -353,9 +348,6 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
               obsv[pixel_x][pixel_y][pixel_theta] = -1000000000000000;
 
-    printf("Check3\n");
-    
-
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     {
       for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
@@ -367,6 +359,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
           float dtheta = pixel_theta * theta_incr;
 
           // vector<Vector2f> shifted_points;
+          double score = 0.0;
           for (auto& point : points)
           {
             // I don't think we need to do this shift
@@ -381,26 +374,16 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
             Vector2f shifted_point = TransformFromBase(point, dx, dy, dtheta);
 
             // shifted_points.push_back(shifted_point);
-            double score = 0.0;
             int point_pixel_x = (xmax - xmin + image_disp) - (shifted_point[0] - xmin);
             int point_pixel_y = (ymax - ymin + image_disp) - (shifted_point[1] - ymin);
 
-            if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
-              continue;
-
             // Not multiplying
             score += temp_image[point_pixel_x][point_pixel_y];
-            obsv[pixel_x][pixel_y][pixel_theta] = std::max(obsv[pixel_x][pixel_y][pixel_theta], score);
-
           }
-            // printf("SCORE: %f\n", score);
-            // Not properly taking max
-          
+          obsv[pixel_x][pixel_y][pixel_theta] = score;
         }
       }
     }
-
-    printf("Check4\n");
 
     for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
       for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
@@ -419,7 +402,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
     previous_pose = best_pose;
 
     printf("New pose: %lf %lf %lf\n", cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
-    // PrintCube(x_width * y_width);
+    // PrintCube(x_width * y_width * theta_width);
     ReinitializeCube();
 
     for (auto& point : previous_scan)
@@ -432,15 +415,7 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
 
       estimated_map.push_back(shifted_point);
     }
-    printf("Check5\n");
   }
-
-  // Transform current robot scan to previous pose
-  // Create image for current scan
-  // For all points:
-  // Get value at that point from the image
-  // Calculate product
-  // Update previous image to current image
 }
 
 void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
