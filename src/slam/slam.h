@@ -93,24 +93,28 @@ class SLAM {
 
   int image_disp = 10;
 
+  float std_dev_sensor = 0.15;
+
   // negative displacements?
 
   static constexpr float x_incr = 0.01;
   static constexpr float y_incr = 0.01;
-  static constexpr float theta_incr = 0.005; 
+  static constexpr float theta_incr = 0.01; 
  
-  static constexpr float x_max = 1;
-  static constexpr float y_max = 1;
-  static constexpr float theta_max = M_PI/4; 
-  static constexpr float x_min = -1;
-  static constexpr float y_min = -1;
-  static constexpr float theta_min = -M_PI/4; 
+  static constexpr float x_max = .6;
+  static constexpr float y_max = .6;
+  static constexpr float theta_max = .6; 
+  static constexpr float x_min = -.6;
+  static constexpr float y_min = -.6;
+  static constexpr float theta_min = -.6; 
 
   static constexpr int x_width = (int) (x_max - x_min) / x_incr;
   static constexpr int y_width = (int) (y_max - y_min) / y_incr;
   static constexpr int theta_width = (int) (theta_max - theta_min) / theta_incr;
 
   double cube[x_width][y_width][theta_width];
+  double obsv[x_width][y_width][theta_width];
+
   // double cube_temp[x_width][y_width][theta_width];
 
   slam::Pose previous_pose = {
@@ -124,10 +128,12 @@ class SLAM {
   
   static constexpr float x_image_incr = 0.1;
   static constexpr float y_image_incr = 0.1;
-  static constexpr float x_image_max = 3;
-  static constexpr float y_image_max = 3;
-  static constexpr int x_image_width = (int) x_image_max / x_image_incr;
-  static constexpr int y_image_width = (int) y_image_max / y_image_incr;
+  static constexpr float x_image_max = 1;
+  static constexpr float y_image_max = 1;
+  static constexpr float x_image_min = -1;
+  static constexpr float y_image_min = -1;
+  static constexpr int x_image_width = (int) (x_image_max - x_image_min) / x_image_incr;
+  static constexpr int y_image_width = (int) (y_image_max - y_image_min) / y_image_incr;
 
   std::vector<Eigen::Vector2f> estimated_map;
   void PrintImage(float image[x_image_width][y_image_width]);
@@ -137,6 +143,10 @@ class SLAM {
   Eigen::Vector2f TransformToBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
 
   void AddToMap(std::vector<Eigen::Vector2f>  current_scan);
+  void EvaluateMotionModel();
+  void EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_scan);
+
+
 
 
 

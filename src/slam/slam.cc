@@ -111,8 +111,10 @@ void SLAM::ReinitializeCube()
 {
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
     for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
-      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++) {
           cube[pixel_x][pixel_y][pixel_theta] = 0.0;
+          obsv[pixel_x][pixel_y][pixel_theta] = 0.0;
+      }
 }
 
 struct Pose SLAM::MostLikelyPose()
@@ -247,14 +249,11 @@ Eigen::Vector2f SLAM::TransformToBase(Eigen::Vector2f point, float dx, float dy,
   return rot * (point + translation);
 }
 
-// Preconditions have been met - determine most likely pose and add scan to map
-void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
-  
-  printf("Adding points to map\n");
-  ReinitializeCube();
-  // Do odometry first
+void SLAM::EvaluateMotionModel() {
   Vector2f translation_hat = p_odom_vector;
   float angle_hat = p_odom_angle;
+  printf("Odom vector: %lf %lf\tAngle: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+
   // printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
   // printf("DIST: %f\n", distance_travelled);
 
@@ -283,6 +282,86 @@ void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
       }
     }
   }
+}
+
+void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_scan) {
+
+    double image[x_image_width][y_image_width];
+    // printf("Image resolution: %d x %d\n", im_rows, im_cols);
+
+    for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+        image[pixel_x][pixel_y] = 0;
+      }
+    }
+
+    for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+    {
+      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+      {
+        float x_val = (pixel_x * x_image_incr) + x_image_min;
+        float y_val = (pixel_y * y_image_incr) + y_image_min;
+
+        for (auto& point : previous_scan)
+        {
+          double prob = 0.0;
+
+          // Decoupled evaluation of multivariate gaussian where product is taken along x and y
+          prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
+          prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
+
+          image[pixel_x][pixel_y] += prob;
+        }
+      }
+    }
+
+  for (auto& point : current_scan)
+  {
+    for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
+    {
+      float dtheta = (pixel_theta * theta_incr) + theta_min;
+      auto rot = GetRotationMatrix(dtheta);
+      Vector2f rot_point = rot * point;
+
+      for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
+      {
+        for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
+        {
+          float dx = (pixel_x * x_incr) + x_min;
+          float dy = (pixel_y * y_incr) + y_min;
+
+          Vector2f shifted_point = rot_point + Vector2f(dx,dy);
+
+          int point_pixel_x = (shifted_point[0] - x_image_min) / x_image_incr;
+          int point_pixel_y = (shifted_point[1] - y_image_min) / y_image_incr;
+
+          if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
+            continue;
+
+          obsv[pixel_x][pixel_y][pixel_theta] += image[point_pixel_x][point_pixel_y];
+        }
+      }
+    }
+  }
+
+    for (int pixel_x = 0; pixel_x < x_width; pixel_x++) {
+      for (int pixel_y = 0; pixel_y < y_width; pixel_y++) {
+        for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++) {
+          cube[pixel_x][pixel_y][pixel_theta] += obsv[pixel_x][pixel_y][pixel_theta];
+        }
+      }
+    }
+}
+
+// Preconditions have been met - determine most likely pose and add scan to map
+void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
+  
+  printf("Adding points to map\n");
+  ReinitializeCube();
+  // Do odometry first
+  
+  EvaluateMotionModel();
+  EvaluateObservationLikelihood(current_scan);
 
   previous_scan = current_scan;
   best_pose = MostLikelyPose();
@@ -294,10 +373,8 @@ void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
   p_odom_vector = Vector2f(0,0);
   p_odom_angle = 0;
 
-  printf("Odom vector: %lf %lf\tAngle: %f\n", translation_hat[0], translation_hat[1], angle_hat);
   printf("New pose: %lf %lf %lf\n", cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
   // PrintCube(x_width * y_width);
-  ReinitializeCube();
 
   for (auto& point : previous_scan)
   {
@@ -306,7 +383,6 @@ void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
 
     estimated_map.push_back(shifted_point);
   }
-
 }
 
 
@@ -343,182 +419,13 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // If conditions met (0.5 m dist or 45 degrees rotated)
   if (distance_travelled <= 0.0 || angle_travelled <= 0)
   { 
-
     vector<Vector2f> current_scan = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
 
     AddToMap(current_scan);
     distance_travelled = distance_travelled_og;
     angle_travelled = angle_travelled_og;
     return;
-    
-    
-  printf("Check2\n");
-
-
-    // printf("Laser %f %f %f\n", previous_pose.delta_x, previous_pose.delta_y, previous_pose.probability);
-
-    // PrintImage(current_image);
-    float bounds[4];
-    GetBoundingBox(bounds);
-    float xmin = bounds[0];
-    float xmax = bounds[1];
-    float ymin = bounds[2];
-    float ymax = bounds[3];
-
-    unsigned int im_rows = (int) (xmax - xmin + image_disp);
-    unsigned int im_cols = (int) (ymax - ymin + image_disp);
-    double temp_image[im_rows][im_cols];
-
-
-    for (unsigned int x = 0; x < im_rows; x++)
-      for (unsigned int y = 0; y < im_cols; y++)
-        temp_image[x][y] = 0;
-
-    for (unsigned int x = 0; x < im_rows; x++)
-    {
-      for (unsigned int y = 0; y < im_cols; y++)
-      {
-        float x_val = (xmax + image_disp) - x;
-        float y_val = (ymax + image_disp) - y;
-
-        for (auto& point : previous_scan)
-        {
-          double prob = 0.0;
-          // float x_diff = x_val - point[0];
-          // float y_diff = y_val - point[1];
-          // printf("X_DIFF %f, Y_DIFF %f\n", x_diff, y_diff);
-          float std_dev = 1;
-
-          // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-          prob += -0.5 * pow((x_val - point[0])/std_dev, 2);
-          prob += -0.5 * pow((y_val - point[1])/std_dev, 2);
-          // printf("PROB: %f\n", prob);
-          // printf("dx: %f dy: %f PROB: %f\n", x - point[0], y- point[1], prob);
-          // Sum of Gaussians 
-          temp_image[x][y] += prob;
-          // if (temp_image[x][y] >= 1.0)
-          //   temp_image[x][y] = 1.0;
-        }
-      }
-    }
-
-  printf("Check2\n");
-
-
-    // double max = temp_image[0][0];
-    // for (unsigned int x = 0; x < im_rows; x++)
-    //   for (unsigned int y = 0; y < im_cols; y++)
-    //     if (temp_image[x][y] > max && !fEquals(temp_image[x][y], 0.0))
-    //       max = temp_image[x][y];
-
-    // // scale every weight
-    // for (unsigned int x = 0; x < im_rows; x++)
-    //   for (unsigned int y = 0; y < im_cols; y++)
-    //     temp_image[x][y] -= max;
-
-    // for (unsigned int x = 0; x < sizeof(temp_image) / sizeof(temp_image[0]); x++)
-    // {
-    //   for (unsigned int y = 0; y < sizeof(temp_image[0]) / sizeof(float); y++)
-    //   {
-    //     printf("%f ", temp_image[x][y]);
-    //   }
-    //   printf("\n");
-    // }
-    vector<Vector2f> points = GetScanPointCloud(ranges, range_min, range_max, angle_min, angle_max);
-    double obsv[x_width][y_width][theta_width];
-    for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
-        for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
-            for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
-              obsv[pixel_x][pixel_y][pixel_theta] = -1000000000000000;
-
-    printf("Check3\n");
-    
-
-    for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
-    {
-      for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
-      {
-        for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
-        {
-          float dx = pixel_x * x_incr;
-          float dy = pixel_y * y_incr;
-          float dtheta = pixel_theta * theta_incr;
-
-          // vector<Vector2f> shifted_points;
-          for (auto& point : points)
-          {
-            // I don't think we need to do this shift
-            // Shift point to previous pose
-            // float new_x = cos(-previous_pose.delta_theta) * point[0] - sin(-previous_pose.delta_theta) * point[1] - previous_pose.delta_x;
-            // float new_y = sin(-previous_pose.delta_theta) * point[0] + cos(-previous_pose.delta_theta) * point[1] - previous_pose.delta_y;
-
-            // // Forward shift by dx, dy, dtheta
-            // float final_x = cos(dtheta) * new_x - sin(dtheta) * new_y + dx;
-            // float final_y = sin(dtheta) * new_x + cos(dtheta) * new_y + dy;
-
-            Vector2f shifted_point = TransformFromBase(point, dx, dy, dtheta);
-
-            // shifted_points.push_back(shifted_point);
-            double score = 0.0;
-            int point_pixel_x = (xmax - xmin + image_disp) - (shifted_point[0] - xmin);
-            int point_pixel_y = (ymax - ymin + image_disp) - (shifted_point[1] - ymin);
-
-            if (point_pixel_x < 0 || point_pixel_x >= xmax || point_pixel_y < 0 || point_pixel_y >= ymax)
-              continue;
-
-            // Not multiplying
-            score += temp_image[point_pixel_x][point_pixel_y];
-            obsv[pixel_x][pixel_y][pixel_theta] = std::max(obsv[pixel_x][pixel_y][pixel_theta], score);
-
-          }
-            // printf("SCORE: %f\n", score);
-            // Not properly taking max
-          
-        }
-      }
-    }
-
-    printf("Check4\n");
-
-    for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
-      for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
-        for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
-        {
-          cube[pixel_x][pixel_y][pixel_theta] += obsv[pixel_x][pixel_y][pixel_theta];
-          // printf("HI: %f\n", obsv[pixel_x][pixel_y][pixel_theta]);
-        }
-
-    // Update all necessary global variables
-    previous_scan = points;
-    best_pose = MostLikelyPose();
-    cumulative_transform.delta_x += best_pose.delta_x;
-    cumulative_transform.delta_y += best_pose.delta_y;
-    cumulative_transform.delta_theta += best_pose.delta_theta;
-    previous_pose = best_pose;
-
-    printf("New pose: %lf %lf %lf\n", cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
-    // PrintCube(x_width * y_width);
-    ReinitializeCube();
-
-    for (auto& point : previous_scan)
-    {
-      // Transform point to reference frame of pose 1
-      // float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
-      // float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
-
-      Vector2f shifted_point = TransformFromBase(point, cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
-
-      estimated_map.push_back(shifted_point);
-    }
-    printf("Check5\n");
   }
-
-  // Transform current robot scan to previous pose
-  // Create image for current scan
-  // For all points:
-  // Get value at that point from the image
-  // Calculate product
-  // Update previous image to current image
 }
 
 void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
@@ -529,9 +436,6 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
     return;
   }
 
-  // printf("Odometry: ")
-  // auto flip = (odom_loc - prev_odom_loc_);
-
   p_odom_vector += odom_loc - prev_odom_loc_;
   p_odom_angle += odom_angle - prev_odom_angle_;
   distance_travelled -= (odom_loc - prev_odom_loc_).norm();
@@ -539,70 +443,9 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   prev_odom_angle_ = odom_angle;
   prev_odom_loc_ = odom_loc;
   return;
-
-  // printf("ODOM %f %f\n", previous_pose.delta_x, previous_pose.delta_y);
-
-  // Keep track of odometry to estimate how far the robot has moved between 
-  // poses.
-
-  ReinitializeCube();
-
-  // Not sure this is correct (maybe too simple?)
-  Vector2f translation_hat = odom_loc - prev_odom_loc_;
-  float angle_hat = odom_angle - prev_odom_angle_;
-  // printf("TRANSLATION: %f %f, Angle Disp: %f\n", translation_hat[0], translation_hat[1], angle_hat);
-  // printf("DIST: %f\n", distance_travelled);
-  distance_travelled -= (odom_loc - prev_odom_loc_).norm();
-  angle_hat -= abs(angle_hat);
-
-  prev_odom_angle_ = odom_angle;
-  prev_odom_loc_ = odom_loc;
-
-  // Try out all possible delta x, y, theta
-  for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
-  {
-    for (int pixel_y = 0; pixel_y < y_width; pixel_y++)
-    {
-      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
-      {
-        float dx = pixel_x * x_incr;
-        float dy = pixel_y * y_incr;
-        float dtheta = pixel_theta * theta_incr;
-
-        double prob = 0.0;
-        float std_dev = k_1 * pow(pow(translation_hat[0], 2) + pow(translation_hat[1], 2), 0.5) + k_2 * (pow(angle_hat, 2));
-
-        // Decoupled evaluation of multivariate gaussian where product is taken along x, y, and theta
-        prob += (-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
-        prob += (-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
-        prob += (-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
-        // printf("PROB: %f\n", prob);
-        // Motion model probability
-        cube[pixel_x][pixel_y][pixel_theta] += prob;
-      }
-    }
-  }
-  // PrintCube(5);
 }
 
 vector<Vector2f> SLAM::GetMap() {
-  vector<Vector2f> map;
-  // Reconstruct the map as a single aligned point cloud from all saved poses
-  // and their respective scans.
-  
-  // if (distance_travelled <= 0.0 || angle_travelled <= 0)
-  // { 
-  //   // For all points in previous scan, apply cumulative transformation to convert points to reference frame of pose 1
-  //   for (auto& point : previous_scan)
-  //   {
-  //     // Transform point to reference frame of pose 1
-  //     float new_x = cos(-cumulative_transform.delta_theta) * point[0] - sin(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_x;
-  //     float new_y = sin(-cumulative_transform.delta_theta) * point[0] + cos(-cumulative_transform.delta_theta) * point[1] - cumulative_transform.delta_y;
-  //     estimated_map.push_back(Vector2f(new_x, new_y));
-  //     distance_travelled = distance_travelled_og;
-  //     angle_travelled = angle_travelled_og;
-  //   }
-  // }
   return estimated_map;
 }
 
