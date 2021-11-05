@@ -312,26 +312,26 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
   CImg<float> image_real(x_image_width,y_image_width,1,1,0);
   
 
-  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
-  {
-    for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
-    {
-      float x_val = (pixel_x * x_image_incr) + x_image_min;
-      float y_val = (pixel_y * y_image_incr) + y_image_min;
+  // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+  // {
+  //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+  //   {
+  //     float x_val = (pixel_x * x_image_incr) + x_image_min;
+  //     float y_val = (pixel_y * y_image_incr) + y_image_min;
 
-      // COMPARING SCAN AGAINST ITSELF FOR DEBUGGING - CHANGE BACK LATER
-      for (auto& point : current_scan)
-      {
-        double prob = 0.0;
+  //     // COMPARING SCAN AGAINST ITSELF FOR DEBUGGING - CHANGE BACK LATER
+  //     for (auto& point : current_scan)
+  //     {
+  //       double prob = 0.0;
 
-        // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-        prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
-        prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
+  //       // Decoupled evaluation of multivariate gaussian where product is taken along x and y
+  //       prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
+  //       prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
 
-        image[pixel_x][pixel_y] += prob;
-      }
-    }
-  }
+  //       image[pixel_x][pixel_y] += prob;
+  //     }
+  //   }
+  // }
 
     // float max = -100000000000000;
     // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
@@ -368,57 +368,58 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
   
   // Debugging
-  // int pixel_spread = 5;
-  // for (auto point : previous_scan) {
-  //   // point[1] = 0.1;
-  //   int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
-  //   int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
+  int pixel_spread = 5;
+  for (auto point : previous_scan) {
+    // point[1] = 0.1;
+    int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
+    int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
 
-  //   if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
-  //     continue;
+    if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
+      continue;
 
-  //   image[point_pixel_x][point_pixel_y] = 1;
-  //   const unsigned char color[] = { 255,255,255 };
-  //   image_real.draw_point(point_pixel_x,point_pixel_y,color);
+    image[point_pixel_x][point_pixel_y] = 1;
+    const unsigned char color[] = { 255,255,255 };
+    image_real.draw_point(point_pixel_x,point_pixel_y,color);
 
-  //   float vector_max =  Vector2f(pixel_spread,pixel_spread).norm();
+    float vector_max =  Vector2f(pixel_spread,pixel_spread).norm();
 
-  //   for (int i = -pixel_spread; i < pixel_spread; i++) {
-  //     for (int j = -pixel_spread; j < pixel_spread; j++) {
-  //       int x = point_pixel_x + i;
-  //       int y = point_pixel_y + j;
+    for (int i = -pixel_spread; i < pixel_spread; i++) {
+      for (int j = -pixel_spread; j < pixel_spread; j++) {
+        int x = point_pixel_x + i;
+        int y = point_pixel_y + j;
 
-  //       if (x < 0 || y < 0 || x >= x_image_width || y >= y_image_width) 
-  //         continue;
+        if (x < 0 || y < 0 || x >= x_image_width || y >= y_image_width) 
+          continue;
 
-  //       image[x][y] += 1.0 - (Vector2f(i,j).norm() / vector_max);
+        image[x][y] += 1.0 - (Vector2f(i,j).norm() / vector_max);
         
-  //     }
-  //   }
-  // }
+      }
+    }
+  }
   
-  // float max = 0;
-  //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
-  //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
-  //       if (image[pixel_x][pixel_y] > max)
-  //         max = image[pixel_x][pixel_y];
-  //     }
-  //  }
+  float max = 0;
+   for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+        if (image[pixel_x][pixel_y] > max)
+          max = image[pixel_x][pixel_y];
+      }
+   }
 
-  //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
-  //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
-  //       unsigned char color_pix = (unsigned char) ((abs(image[pixel_x][pixel_y] / max) * 255));
-  //       const unsigned char color[] = { color_pix,color_pix,color_pix };
-  //       image_real.draw_point(pixel_x,pixel_y,color);
-  //     }
-  //  }
+   for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+        unsigned char color_pix = (unsigned char) ((abs(image[pixel_x][pixel_y] / max) * 255));
+        const unsigned char color[] = { color_pix,color_pix,color_pix };
+        image_real.draw_point(pixel_x,pixel_y,color);
+      }
+   }
 
-  // image_real.save("lookup_table.bmp");
+  image_real.save("lookup_table.bmp");
 
 
   for (auto point : current_scan)
   {
-    // point[0] += 0.1;
+    // To test with an offset, do it here
+    point[0] += 0.3;
     for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
     {
       float dtheta = (pixel_theta * theta_incr) + theta_min;
@@ -446,13 +447,13 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
     }
   }
 
-    for (int pixel_x = 0; pixel_x < x_width; pixel_x++) {
-      for (int pixel_y = 0; pixel_y < y_width; pixel_y++) {
-        for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++) {
-          cube[pixel_x][pixel_y][pixel_theta] += obsv[pixel_x][pixel_y][pixel_theta];
-        }
+  for (int pixel_x = 0; pixel_x < x_width; pixel_x++) {
+    for (int pixel_y = 0; pixel_y < y_width; pixel_y++) {
+      for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++) {
+        cube[pixel_x][pixel_y][pixel_theta] += obsv[pixel_x][pixel_y][pixel_theta];
       }
     }
+  }
 }
 
 // Preconditions have been met - determine most likely pose and add scan to map
