@@ -310,48 +310,115 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
 
   CImg<float> image_real(x_image_width,y_image_width,1,1,0);
-  const unsigned char color[] = { 255,255,255};
+  
 
-    // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
-    // {
-    //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
-    //   {
-    //     float x_val = (pixel_x * x_image_incr) + x_image_min;
-    //     float y_val = (pixel_y * y_image_incr) + y_image_min;
+  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+  {
+    for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+    {
+      float x_val = (pixel_x * x_image_incr) + x_image_min;
+      float y_val = (pixel_y * y_image_incr) + y_image_min;
 
-    //     // COMPARING SCAN AGAINST ITSELF FOR DEBUGGING - CHANGE BACK LATER
-    //     for (auto& point : current_scan)
-    //     {
-    //       double prob = 0.0;
+      // COMPARING SCAN AGAINST ITSELF FOR DEBUGGING - CHANGE BACK LATER
+      for (auto& point : current_scan)
+      {
+        double prob = 0.0;
 
-    //       // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-    //       prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
-    //       prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
+        // Decoupled evaluation of multivariate gaussian where product is taken along x and y
+        prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
+        prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
 
-    //       image[pixel_x][pixel_y] += prob;
+        image[pixel_x][pixel_y] += prob;
+      }
+    }
+  }
+
+    // float max = -100000000000000;
+    // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+    //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+    //     if (image[pixel_x][pixel_y] > max) {
+    //       max = image[pixel_x][pixel_y];
     //     }
     //   }
     // }
+    // printf("Max: %lf\n", max);
 
+    // float min = 0;
+    // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+    //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+    //     image[pixel_x][pixel_y] -= max;
+    //     if (image[pixel_x][pixel_y] < min)
+    //       min = image[pixel_x][pixel_y];
+
+    //     // printf("pixel: %f\n", image[pixel_x][pixel_y]);
+    //   }
+    // }
+
+    for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+        unsigned char color_pix = (int) image[pixel_x][pixel_y];
+        const unsigned char color[] = { color_pix,color_pix,color_pix };
+        image_real.draw_point(pixel_x,pixel_y,color);
+      }
+    }
+
+  image_real.save("image.bmp");
+  // CImgDisplay main_disp(image_real,"Click a point");
+
+
+  
   // Debugging
-  for (auto point : current_scan) {
-    // point[1] += 0.5;
-    int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
-    int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
+  // int pixel_spread = 5;
+  // for (auto point : previous_scan) {
+  //   // point[1] = 0.1;
+  //   int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
+  //   int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
 
-    if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
-      continue;
+  //   if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
+  //     continue;
 
-    image[point_pixel_x][point_pixel_y] = 1;
-    image_real.draw_point(point_pixel_x,point_pixel_y,color);
+  //   image[point_pixel_x][point_pixel_y] = 1;
+  //   const unsigned char color[] = { 255,255,255 };
+  //   image_real.draw_point(point_pixel_x,point_pixel_y,color);
 
-  }
+  //   float vector_max =  Vector2f(pixel_spread,pixel_spread).norm();
 
-  image_real.save("lookup_table.bmp");
+  //   for (int i = -pixel_spread; i < pixel_spread; i++) {
+  //     for (int j = -pixel_spread; j < pixel_spread; j++) {
+  //       int x = point_pixel_x + i;
+  //       int y = point_pixel_y + j;
+
+  //       if (x < 0 || y < 0 || x >= x_image_width || y >= y_image_width) 
+  //         continue;
+
+  //       image[x][y] += 1.0 - (Vector2f(i,j).norm() / vector_max);
+        
+  //     }
+  //   }
+  // }
+  
+  // float max = 0;
+  //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+  //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+  //       if (image[pixel_x][pixel_y] > max)
+  //         max = image[pixel_x][pixel_y];
+  //     }
+  //  }
+
+  //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+  //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+  //       unsigned char color_pix = (unsigned char) ((abs(image[pixel_x][pixel_y] / max) * 255));
+  //       const unsigned char color[] = { color_pix,color_pix,color_pix };
+  //       image_real.draw_point(pixel_x,pixel_y,color);
+  //     }
+  //  }
+
+  // image_real.save("lookup_table.bmp");
 
 
-  for (auto& point : current_scan)
+  for (auto point : current_scan)
   {
+    // point[0] += 0.1;
     for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
     {
       float dtheta = (pixel_theta * theta_incr) + theta_min;
@@ -395,6 +462,11 @@ void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
 
   printf("Adding points to map\n");
   ReinitializeCube();
+
+  // Vector2f translation_hat = p_odom_vector;
+  // float angle_hat = p_odom_angle;
+  // printf("Odom vector: %lf %lf\tAngle: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+
   // Do odometry first
   
   // EvaluateMotionModel();
