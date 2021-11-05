@@ -35,6 +35,14 @@
 #include "vector_map/vector_map.h"
 #include <stdexcept>
 
+#include <stdio.h>
+#include <iostream>
+#include <cmath>
+
+#include "eigen3/Eigen/Dense"
+#include "eigen3/Eigen/Geometry"
+#include "visualization/CImg.h"
+
 
 using namespace math_util;
 using Eigen::Affine2f;
@@ -48,6 +56,10 @@ using std::string;
 using std::swap;
 using std::vector;
 using vector_map::VectorMap;
+
+using cimg_library::CImg;
+using cimg_library::CImgDisplay;
+
 
 const float kEpsilon = 1e-5;
 
@@ -143,8 +155,8 @@ struct Pose SLAM::MostLikelyPose()
     {
       for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
       {   
-          if (cube[pixel_x][pixel_y][pixel_theta] >= 0)
-            printf("SHOULDNT SEE THIS\n");
+          // if (cube[pixel_x][pixel_y][pixel_theta] >= 0)
+          //   printf("SHOULDNT SEE THIS\n");
             
           if (most_likely < cube[pixel_x][pixel_y][pixel_theta])
           {
@@ -287,6 +299,7 @@ void SLAM::EvaluateMotionModel() {
 void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_scan) {
 
     double image[x_image_width][y_image_width];
+    quit = true;
     // printf("Image resolution: %d x %d\n", im_rows, im_cols);
 
     for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
@@ -295,25 +308,47 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
       }
     }
 
-    for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
-    {
-      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
-      {
-        float x_val = (pixel_x * x_image_incr) + x_image_min;
-        float y_val = (pixel_y * y_image_incr) + y_image_min;
 
-        for (auto& point : previous_scan)
-        {
-          double prob = 0.0;
+  CImg<float> image_real(x_image_width,y_image_width,1,1,0);
+  const unsigned char color[] = { 255,255,255};
 
-          // Decoupled evaluation of multivariate gaussian where product is taken along x and y
-          prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
-          prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
+    // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++)
+    // {
+    //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++)
+    //   {
+    //     float x_val = (pixel_x * x_image_incr) + x_image_min;
+    //     float y_val = (pixel_y * y_image_incr) + y_image_min;
 
-          image[pixel_x][pixel_y] += prob;
-        }
-      }
-    }
+    //     // COMPARING SCAN AGAINST ITSELF FOR DEBUGGING - CHANGE BACK LATER
+    //     for (auto& point : current_scan)
+    //     {
+    //       double prob = 0.0;
+
+    //       // Decoupled evaluation of multivariate gaussian where product is taken along x and y
+    //       prob += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
+    //       prob += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
+
+    //       image[pixel_x][pixel_y] += prob;
+    //     }
+    //   }
+    // }
+
+  // Debugging
+  for (auto point : current_scan) {
+    // point[1] += 0.5;
+    int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
+    int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
+
+    if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
+      continue;
+
+    image[point_pixel_x][point_pixel_y] = 1;
+    image_real.draw_point(point_pixel_x,point_pixel_y,color);
+
+  }
+
+  image_real.save("lookup_table.bmp");
+
 
   for (auto& point : current_scan)
   {
@@ -355,12 +390,14 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
 // Preconditions have been met - determine most likely pose and add scan to map
 void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
-  
+  if (quit)
+    return;
+
   printf("Adding points to map\n");
   ReinitializeCube();
   // Do odometry first
   
-  EvaluateMotionModel();
+  // EvaluateMotionModel();
   EvaluateObservationLikelihood(current_scan);
 
   previous_scan = current_scan;

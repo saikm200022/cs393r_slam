@@ -126,18 +126,20 @@ class SLAM {
   slam::Pose best_pose;
   std::vector<Eigen::Vector2f> previous_scan;
   
-  static constexpr float x_image_incr = 0.1;
-  static constexpr float y_image_incr = 0.1;
-  static constexpr float x_image_max = 1;
-  static constexpr float y_image_max = 1;
-  static constexpr float x_image_min = -1;
-  static constexpr float y_image_min = -1;
+  static constexpr float x_image_incr = 0.01;
+  static constexpr float y_image_incr = 0.01;
+  static constexpr float x_image_max = 3;
+  static constexpr float y_image_max = 3;
+  static constexpr float x_image_min = -3;
+  static constexpr float y_image_min = -3;
   static constexpr int x_image_width = (int) (x_image_max - x_image_min) / x_image_incr;
   static constexpr int y_image_width = (int) (y_image_max - y_image_min) / y_image_incr;
 
   std::vector<Eigen::Vector2f> estimated_map;
   void PrintImage(float image[x_image_width][y_image_width]);
   void InitializeImage(float image[x_image_width][y_image_width]);
+
+  bool quit = false;
 
   Eigen::Vector2f TransformFromBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
   Eigen::Vector2f TransformToBase(Eigen::Vector2f point, float dx, float dy, float dtheta);
