@@ -97,9 +97,9 @@ class SLAM {
 
   // negative displacements?
 
-  static constexpr float x_incr = 0.05;
-  static constexpr float y_incr = 0.05;
-  static constexpr float theta_incr = 0.02; 
+  static constexpr float x_incr = 0.01;
+  static constexpr float y_incr = 0.01;
+  static constexpr float theta_incr = 0.01; 
  
   static constexpr float x_max = .6;
   static constexpr float y_max = .6;
@@ -126,8 +126,8 @@ class SLAM {
   slam::Pose best_pose;
   std::vector<Eigen::Vector2f> previous_scan;
   
-  static constexpr float x_image_incr = 0.05;
-  static constexpr float y_image_incr = 0.05;
+  static constexpr float x_image_incr = 0.01;
+  static constexpr float y_image_incr = 0.01;
   static constexpr float x_image_max = 3;
   static constexpr float y_image_max = 3;
   static constexpr float x_image_min = -3;
