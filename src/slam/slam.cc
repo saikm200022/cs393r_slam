@@ -299,7 +299,7 @@ void SLAM::EvaluateMotionModel() {
 void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_scan) {
 
     double image[x_image_width][y_image_width];
-    // quit = true;
+    quit = true;
     // printf("Image resolution: %d x %d\n", im_rows, im_cols);
 
     for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
@@ -311,7 +311,7 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
   CImg<float> image_real(x_image_width,y_image_width,1,1,0);
 
-  int radius = 5;
+  int radius = 3;
   for (auto point : previous_scan) {
     // point[1] = 0.1;
     int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
@@ -323,6 +323,7 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
     // image[point_pixel_x][point_pixel_y] += 1;
     const unsigned char color[] = { 255,255,255 };
     image_real.draw_point(point_pixel_x,point_pixel_y,color);
+
 
     // float vector_max =  Vector2f(radius,radius).norm();
 
@@ -340,15 +341,32 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
           // image[x][y] += 1.0 - (Vector2f(i,j).norm() / vector_max);
           // if (fEquals(image[x][y], 0))
           //   image[x][y] = 1.0;
-          image[x][y] += exp(-0.5 * pow((x_val - point[0])/std_dev_sensor, 2));
-          image[x][y] += exp(-0.5 * pow((y_val - point[1])/std_dev_sensor, 2));
+          image[x][y] += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
+          image[x][y] += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
         }
-        
       }
     }
   }
+
+  float min = 1000000000000000000;
+    for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+      for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+        if (image[pixel_x][pixel_y] < min)
+          min = image[pixel_x][pixel_y];
+      }
+    }
+
+  min = min - 10000000;
+  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+    for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+      if (fEquals(image[pixel_x][pixel_y], 0))
+        image[pixel_x][pixel_y] = min;
+    }
+  }
+
+
   
-  // float max = 0;
+  // float max = -1000000000000;
   //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
   //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
   //       if (image[pixel_x][pixel_y] > max)
@@ -356,13 +374,24 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
   //     }
   //  }
 
+  // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+  //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+  //       image[pixel_x][pixel_y] += abs(min);
+  //   }
+  // }
+
+  // double weight_sum = 0;
+  // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
+  //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
+  //       weight_sum += exp(image[pixel_x][pixel_y]);
+  //   }
+  // }
+
   //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
   //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
   //       unsigned char color_pix;
-  //       if (image[pixel_x][pixel_y] == max) 
-  //         color_pix = 255;
-  //       else
-  //         color_pix = (unsigned char) ((abs(image[pixel_x][pixel_y] / max) * 255));
+
+  //       color_pix = (unsigned char) (((image[pixel_x][pixel_y] + abs(min) / abs(min - max)) * 255));
   //       const unsigned char color[] = { color_pix,color_pix,color_pix };
   //       image_real.draw_point(pixel_x,pixel_y,color);
   //     }
@@ -374,8 +403,8 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
   for (auto point : current_scan)
   {
     // To test with an offset, do it here
-    // point[0] += 0.10;
-    // point[1] -= 0.38;
+    point[0] += 0.10;
+    point[1] -= 0.38;
 
     for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
     {
@@ -415,19 +444,19 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
 // Preconditions have been met - determine most likely pose and add scan to map
 void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
-  // if (quit)
-  //   return;
+  if (quit)
+    return;
 
   printf("Adding points to map\n");
   ReinitializeCube();
 
-  // Vector2f translation_hat = p_odom_vector;
-  // float angle_hat = p_odom_angle;
-  // printf("Odom vector: %lf %lf\tAngle: %f\n", translation_hat[0], translation_hat[1], angle_hat);
+  Vector2f translation_hat = p_odom_vector;
+  float angle_hat = p_odom_angle;
+  printf("Odom vector: %lf %lf\tAngle: %f\n", translation_hat[0], translation_hat[1], angle_hat);
 
   // Do odometry first
   
-  EvaluateMotionModel();
+  // EvaluateMotionModel();
   EvaluateObservationLikelihood(current_scan);
 
   previous_scan = current_scan;

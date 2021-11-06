@@ -83,7 +83,7 @@ class SLAM {
   float k_2 = 0.1;
   float laser_off = 0.2;
 
-  float distance_travelled_og = 0.5; 
+  float distance_travelled_og = 0.8; 
   float distance_travelled = distance_travelled_og;
   float angle_travelled_og = 0.5;
   float angle_travelled = angle_travelled_og;
@@ -91,21 +91,21 @@ class SLAM {
   Eigen::Vector2f p_odom_vector;
   float p_odom_angle;
 
-  int image_disp = 10;
+  // int image_disp = 10;
 
   float std_dev_sensor = 0.15;
 
   // negative displacements?
 
-  static constexpr float x_incr = 0.01;
-  static constexpr float y_incr = 0.01;
+  static constexpr float x_incr = 0.05;
+  static constexpr float y_incr = 0.05;
   static constexpr float theta_incr = 0.01; 
  
-  static constexpr float x_max = .6;
-  static constexpr float y_max = .6;
+  static constexpr float x_max = 1;
+  static constexpr float y_max = 1;
   static constexpr float theta_max = .6; 
-  static constexpr float x_min = -.6;
-  static constexpr float y_min = -.6;
+  static constexpr float x_min = -1;
+  static constexpr float y_min = -1;
   static constexpr float theta_min = -.6; 
 
   static constexpr int x_width = (int) (x_max - x_min) / x_incr;
@@ -126,8 +126,8 @@ class SLAM {
   slam::Pose best_pose;
   std::vector<Eigen::Vector2f> previous_scan;
   
-  static constexpr float x_image_incr = 0.01;
-  static constexpr float y_image_incr = 0.01;
+  static constexpr float x_image_incr = 0.05;
+  static constexpr float y_image_incr = 0.05;
   static constexpr float x_image_max = 3;
   static constexpr float y_image_max = 3;
   static constexpr float x_image_min = -3;
