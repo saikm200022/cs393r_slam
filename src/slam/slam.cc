@@ -369,7 +369,7 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
   
   // Debugging
   int pixel_spread = 5;
-  for (auto point : previous_scan) {
+  for (auto point : current_scan) {
     // point[1] = 0.1;
     int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
     int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
