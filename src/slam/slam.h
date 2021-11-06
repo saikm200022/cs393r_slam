@@ -115,7 +115,6 @@ class SLAM {
   double cube[x_width][y_width][theta_width];
   double obsv[x_width][y_width][theta_width];
 
-  // double cube_temp[x_width][y_width][theta_width];
 
   slam::Pose previous_pose = {
     -1000, -1000, -1000, 0.0

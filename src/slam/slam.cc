@@ -140,13 +140,11 @@ struct Pose SLAM::MostLikelyPose()
   //   return first_pose;
   // }
 
-  // Query 3D cube for most likely pose
-  // Convert pose to map frame
+  float best_x = 0;
+  float best_y = 0;
+  float best_theta = 0;
+  float most_likely = -1000000000000000000000000000000.0;
 
-  float best_x = 0.0;
-  float best_y = 0.0;
-  float best_theta = 0.0;
-  double most_likely = -1000000000000000000000000000000.0;
 
   // Consult cube to find displacement that results in most likely pose
   for (int pixel_x = 0; pixel_x < x_width; pixel_x++)
@@ -155,9 +153,7 @@ struct Pose SLAM::MostLikelyPose()
     {
       for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
       {   
-          // if (cube[pixel_x][pixel_y][pixel_theta] >= 0)
-          //   printf("SHOULDNT SEE THIS\n");
-            
+
           if (most_likely < cube[pixel_x][pixel_y][pixel_theta])
           {
             
@@ -169,9 +165,9 @@ struct Pose SLAM::MostLikelyPose()
       }
     }
   }
-  struct Pose new_pose = {
-    best_x, best_y, best_theta, most_likely
-  };
+
+  struct Pose new_pose = { best_x, best_y, best_theta, most_likely};
+
   // printf("BEST POSE: %f %f %f %f\n", best_x, best_y, best_theta, most_likely);
   return new_pose;
 }
@@ -287,8 +283,7 @@ void SLAM::EvaluateMotionModel() {
         prob += (-0.5 * pow((dx - translation_hat[0])/std_dev, 2));
         prob += (-0.5 * pow((dy - translation_hat[1])/std_dev, 2));
         prob += (-0.5 * pow((dtheta - angle_hat)/std_dev, 2));
-        // printf("dx dy dt: %lf %lf %lf\n", dx, dy, dtheta);
-        // printf("PROB: %f\n", prob);
+
         // Motion model probability
         cube[pixel_x][pixel_y][pixel_theta] += prob;
       }
@@ -299,7 +294,7 @@ void SLAM::EvaluateMotionModel() {
 void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_scan) {
 
     double image[x_image_width][y_image_width];
-    quit = true;
+    // quit = true;
     // printf("Image resolution: %d x %d\n", im_rows, im_cols);
 
     for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
@@ -313,19 +308,14 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
   int radius = 3;
   for (auto point : previous_scan) {
-    // point[1] = 0.1;
     int point_pixel_x = (point[0] - x_image_min) / x_image_incr;
     int point_pixel_y = (point[1] - y_image_min) / y_image_incr;
 
     if (point_pixel_x < 0 || point_pixel_x >= x_image_width || point_pixel_y < 0 || point_pixel_y >= y_image_width)
       continue;
 
-    // image[point_pixel_x][point_pixel_y] += 1;
     const unsigned char color[] = { 255,255,255 };
     image_real.draw_point(point_pixel_x,point_pixel_y,color);
-
-
-    // float vector_max =  Vector2f(radius,radius).norm();
 
     for (int i = -radius; i < radius; i++) {
       for (int j = -radius; j < radius; j++) {
@@ -338,9 +328,6 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
           continue;
 
         if (pow(x - point_pixel_x, 2) + pow(y - point_pixel_y, 2) <= pow(radius,2)) {
-          // image[x][y] += 1.0 - (Vector2f(i,j).norm() / vector_max);
-          // if (fEquals(image[x][y], 0))
-          //   image[x][y] = 1.0;
           image[x][y] += -0.5 * pow((x_val - point[0])/std_dev_sensor, 2);
           image[x][y] += -0.5 * pow((y_val - point[1])/std_dev_sensor, 2);
         }
@@ -364,47 +351,14 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
     }
   }
 
-
-  
-  // float max = -1000000000000;
-  //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
-  //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
-  //       if (image[pixel_x][pixel_y] > max)
-  //         max = image[pixel_x][pixel_y];
-  //     }
-  //  }
-
-  // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
-  //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
-  //       image[pixel_x][pixel_y] += abs(min);
-  //   }
-  // }
-
-  // double weight_sum = 0;
-  // for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
-  //   for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
-  //       weight_sum += exp(image[pixel_x][pixel_y]);
-  //   }
-  // }
-
-  //  for (unsigned int pixel_x = 0; pixel_x < x_image_width; pixel_x++) {
-  //     for (unsigned int pixel_y = 0; pixel_y < y_image_width; pixel_y++) {
-  //       unsigned char color_pix;
-
-  //       color_pix = (unsigned char) (((image[pixel_x][pixel_y] + abs(min) / abs(min - max)) * 255));
-  //       const unsigned char color[] = { color_pix,color_pix,color_pix };
-  //       image_real.draw_point(pixel_x,pixel_y,color);
-  //     }
-  //  }
-
-  // image_real.save("lookup_table.bmp");
-
-
   for (auto point : current_scan)
   {
     // To test with an offset, do it here
-    point[0] += 0.10;
-    point[1] -= 0.38;
+    // point[0] += 0.10;
+    // point[1] -= 0.38;
+    // auto rot1 = GetRotationMatrix(0.25);
+    // point = rot1 * point;
+
 
     for (int pixel_theta = 0; pixel_theta < theta_width; pixel_theta++)
     {
@@ -444,8 +398,6 @@ void SLAM::EvaluateObservationLikelihood(std::vector<Eigen::Vector2f> current_sc
 
 // Preconditions have been met - determine most likely pose and add scan to map
 void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
-  if (quit)
-    return;
 
   printf("Adding points to map\n");
   ReinitializeCube();
@@ -456,21 +408,22 @@ void SLAM::AddToMap(std::vector<Eigen::Vector2f> current_scan) {
 
   // Do odometry first
   
-  // EvaluateMotionModel();
+  EvaluateMotionModel();
   EvaluateObservationLikelihood(current_scan);
 
   previous_scan = current_scan;
   best_pose = MostLikelyPose();
   printf("Best pose: %lf %lf %lf\n", best_pose.delta_x, best_pose.delta_y, best_pose.delta_theta);
-  cumulative_transform.delta_x += best_pose.delta_x;
-  cumulative_transform.delta_y += best_pose.delta_y;
+  auto rot = GetRotationMatrix(cumulative_transform.delta_theta);
+  Vector2f new_vec = rot * Vector2f(best_pose.delta_x, best_pose.delta_y);
+  cumulative_transform.delta_x += new_vec[0];
+  cumulative_transform.delta_y += new_vec[1];
   cumulative_transform.delta_theta += best_pose.delta_theta;
   previous_pose = best_pose;
   p_odom_vector = Vector2f(0,0);
   p_odom_angle = 0;
 
   printf("New pose: %lf %lf %lf\n", cumulative_transform.delta_x, cumulative_transform.delta_y, cumulative_transform.delta_theta);
-  // PrintCube(x_width * y_width);
 
   for (auto& point : previous_scan)
   {
