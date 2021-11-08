@@ -103,7 +103,7 @@ class SLAM {
  
   static constexpr float x_max = 1;
   static constexpr float y_max = 1;
-  static constexpr float theta_max = .6; 
+  static constexpr float theta_max = 1.6; 
   static constexpr float x_min = -1;
   static constexpr float y_min = -1;
   static constexpr float theta_min = -.6; 
